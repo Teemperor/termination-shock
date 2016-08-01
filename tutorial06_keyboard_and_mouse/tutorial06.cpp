@@ -21,6 +21,25 @@ using namespace glm;
 #include <iostream>
 #include <memory>
 
+class Texture {
+
+public:
+	Texture() {
+
+	}
+	void activate() {
+
+	}
+	void clear() {
+
+	}
+};
+
+class TextureManager {
+public:
+};
+
+TextureManager TextureManager;
 
 struct v3 {
 	float x, y, z;
@@ -69,11 +88,18 @@ public:
 	TexRec(const TexRec &Other) = delete;
 
 	~TexRec() {
-		if (!vertexes.empty()) {
-			//assert(false);
-			//glDeleteBuffers(1, &vertexbuffer);
-			//glDeleteBuffers(1, &uvbuffer);
-		}
+		glDeleteBuffers(1, &vertexbuffer);
+		glDeleteBuffers(1, &uvbuffer);
+	}
+
+	void update() {
+		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, vertexes.size() * sizeof(GLfloat), vertexes.data());
+	}
+
+	void raise() {
+		vertexes[1] += 0.01f;
+		update();
 	}
 
 	void draw() {
@@ -207,39 +233,6 @@ int main( void ) {
 	// Get a handle for our "myTextureSampler" uniform
 	GLuint TextureID = glGetUniformLocation(programID, "myTextureSampler");
 
-	// Our vertices. Tree consecutive floats give a 3D vertex; Three consecutive vertices give a triangle.
-	// A cube has 6 faces with 2 triangles each, so this makes 6*2=12 triangles, and 12*3 vertices
-	static const GLfloat g_vertex_buffer_data[] = {
-		0.0f, 0.0f, 0.0f,
-		SIZE, 0.0f, 0.0f,
-		SIZE, SIZE, 0.0f,
-		SIZE, SIZE, 0.0f,
-		0.0f, SIZE, 0.0f,
-		0.0f, 0.0f, 0.0f
-	};
-
-	// Two UV coordinatesfor each vertex. They were created withe Blender.
-	static const GLfloat g_uv_buffer_data[] = {
-		0, 0,
-		1, 0,
-		1, 1,
-		1, 1,
-		0, 1,
-		0, 0,
-	};
-
-	GLuint vertexbuffer;
-	glGenBuffers(1, &vertexbuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data),
-							 g_vertex_buffer_data, GL_STATIC_DRAW);
-
-	GLuint uvbuffer;
-	glGenBuffers(1, &uvbuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(g_uv_buffer_data), g_uv_buffer_data,
-							 GL_STATIC_DRAW);
-
 	{
 
 		std::vector<Tile> tiles;
@@ -274,37 +267,6 @@ int main( void ) {
 			// Set our "myTextureSampler" sampler to user Texture Unit 0
 			glUniform1i(TextureID, 0);
 
-			// 1rst attribute buffer : vertices
-			glEnableVertexAttribArray(0);
-			glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-			glVertexAttribPointer(
-				0,                  // attribute. No particular reason for 0, but must match the layout in the shader.
-				3,                  // size
-				GL_FLOAT,           // type
-				GL_FALSE,           // normalized?
-				0,                  // stride
-				(void *) 0            // array buffer offset
-			);
-
-			// 2nd attribute buffer : UVs
-			glEnableVertexAttribArray(1);
-			glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-			glVertexAttribPointer(
-				1,                                // attribute. No particular reason for 1, but must match the layout in the shader.
-				2,                                // size : U+V => 2
-				GL_FLOAT,                         // type
-				GL_FALSE,                         // normalized?
-				0,                                // stride
-				(void *) 0                          // array buffer offset
-			);
-
-			// Draw the triangle !
-			glDrawArrays(GL_TRIANGLES, 0,
-									 12 * 3); // 12*3 indices starting at 0 -> 12 triangles
-
-			glDisableVertexAttribArray(0);
-			glDisableVertexAttribArray(1);
-
 			for (Tile &t : tiles)
 				t.draw();
 
@@ -319,8 +281,6 @@ int main( void ) {
 	}
 
 	// Cleanup VBO and shader
-	glDeleteBuffers(1, &vertexbuffer);
-	glDeleteBuffers(1, &uvbuffer);
 	glDeleteProgram(programID);
 	glDeleteTextures(1, &TextureID);
 	glDeleteVertexArrays(1, &VertexArrayID);
