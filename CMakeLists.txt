@@ -47,6 +47,7 @@ set(ALL_LIBS
 	${OPENGL_LIBRARY}
 	glfw
 	GLEW_1130
+	noise
 )
 
 add_definitions(

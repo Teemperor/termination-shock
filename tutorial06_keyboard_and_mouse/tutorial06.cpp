@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <noise/noise.h>
+
 // Include GLEW
 #include <GL/glew.h>
 
@@ -23,6 +25,7 @@ using namespace glm;
 #include <chrono>
 #include <unordered_map>
 #include <algorithm>
+#include <random>
 
 class Texture {
 
@@ -160,8 +163,10 @@ public:
 		glBufferSubData(GL_ARRAY_BUFFER, 0, vertexes.size() * sizeof(GLfloat), vertexes.data());
 	}
 
-	void raise() {
-		vertexes[1] += 0.01f;
+	void setHeights(float h) {
+		for (int i = 0; i < 6; ++i) {
+			vertexes[1 + i * 3] = h;
+		}
 		update();
 	}
 
@@ -239,8 +244,7 @@ public:
 	bool isCliff() const {
 		auto max = std::max_element(std::begin(Height), std::end(Height));
 		auto min = std::min_element(std::begin(Height), std::end(Height));
-		std::cout << *max << " " << *min << " " << (*max - *min) << std::endl;
-		return (*max - *min) >= 2;
+		return (*max - *min) >= 4;
 	}
 
 };
@@ -252,9 +256,26 @@ class TileMap {
 
 	Tile DefaultTile;
 
+	void generate() {
+		noise::module::Perlin myModule;
+		double offset = std::random_device()();
+		std::cerr << offset << std::endl;
+
+		for (int x = 0; x < Width; ++x) {
+			for (int y = 0; y < Width; ++y) {
+				get(x, y) = Tile(x, y);
+				double factor = 40.0;
+				int height = (int) (myModule.GetValue(offset + x / factor, offset + y / factor, offset + 0.5) * 10);
+
+				setHeight(x, y, height);
+			}
+		}
+	}
+
 public:
 	TileMap(int Width, int Height) : Width(Width), Height(Height) {
 		Tiles.resize(Width * Height);
+		generate();
 	}
 
 	Tile& get(int X, int Y) {
@@ -315,8 +336,8 @@ public:
 	TileRenderer(Tile &T) {
 		float xOff = SIZE * T.getX();
 		float yOff = SIZE * T.getY();
-		std::string Texture = T.getY() != 8 ? "grass.bmp" : "street.bmp";
-		if (T.isCliff())
+		std::string Texture = T.getY() != 13 ? "grass.bmp" : "street.bmp";
+		if (T.isCliff() || T.hasWater())
 			Texture = "stones.bmp";
 		Rec.reset(new TexRec(Texture,
 												 {xOff       , HEIGHT * T.getHeight(0), SIZE + yOff},
@@ -339,7 +360,12 @@ public:
 
 	void draw() {
 		if (IsWater) {
+			namespace chr = std::chrono;
 
+			chr::time_point<chr::steady_clock> tp = chr::steady_clock::now();
+
+			float waterDwindle = std::cos(chr::duration_cast<chr::milliseconds>(tp.time_since_epoch()).count() / 1000.0);
+			Rec->setHeights(HEIGHT * -0.25f + HEIGHT * 0.13f * waterDwindle);
 		}
 		Rec->draw();
 	}
@@ -376,7 +402,7 @@ int main( void ) {
 	}
 
 	TileMap Map(100, 100);
-	for (unsigned x = 0; x < Map.getWidth(); x++) {
+	/*for (unsigned x = 0; x < Map.getWidth(); x++) {
 		for (unsigned y = 0; y < Map.getHeight(); y++) {
 			Map.get(x, y) = Tile(x, y);
 		}
@@ -389,6 +415,19 @@ int main( void ) {
 	Map.setHeight(19, 19, 3);
 	Map.setHeight(11, 11, -1);
 
+	Map.setHeight(89, 89, 6);
+	Map.setHeight(89, 87, 6);
+	Map.setHeight(89, 88, 6);
+	Map.setHeight(88, 89, 6);
+	Map.setHeight(81, 81, -1);
+
+	for (int x = 44; x < 66; x++) {
+		for (int y = 22; y < 33; y++) {
+
+			Map.setHeight(x, y, -1);
+		}
+	}
+*/
 	FPSCounter Counter;
 
 	glfwWindowHint(GLFW_SAMPLES, 4);
@@ -435,6 +474,8 @@ int main( void ) {
 	glEnable(GL_DEPTH_TEST);
 	// Accept fragment if it closer to the camera than the former one
 	glDepthFunc(GL_LESS);
+	glEnable( GL_BLEND );
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	// Cull triangles which normal is not towards the camera
 	//glEnable(GL_CULL_FACE);
