@@ -192,41 +192,154 @@ public:
 		);
 
 		// Draw the triangle !
-		glDrawArrays(GL_TRIANGLES, 0, 6); // 12*3 indices starting at 0 -> 12 triangles
+		glDrawArrays(GL_TRIANGLES, 0, 6);
 
 		glDisableVertexAttribArray(0);
 		glDisableVertexAttribArray(1);
 	}
 };
 
-#define SIZE 0.1f
-
 class Tile {
-
-	std::shared_ptr<TexRec> Rec;
-
+	int Height[4] = {0, 0, 0, 0};
+	int X = -1, Y = -1;
 public:
 	Tile() {
 	}
-	Tile(int x, int y) {
+	Tile(int X, int Y) : X(X), Y(Y) {
+	}
+
+	int getHeight(int i) const {
+		return Height[i];
+	}
+
+	void setHeight(int i, int value) {
+		Height[i] = value;
+	}
+
+	int getX() const {
+		return X;
+	}
+
+	int getY() const {
+		return Y;
+	}
+
+	operator bool() const {
+		return X >= 0;
+	}
+
+	bool hasWater() const {
+		for (int i = 0; i < 4; ++i)
+			if (Height[i] < 0)
+				return true;
+		return false;
+	}
+
+};
+
+class TileMap {
+	std::vector<Tile> Tiles;
+	int Width;
+	int Height;
+
+	Tile DefaultTile;
+
+public:
+	TileMap(int Width, int Height) : Width(Width), Height(Height) {
+		Tiles.resize(Width * Height);
+	}
+
+	Tile& get(int X, int Y) {
+		if (X < 0 || Y < 0 || X >= Width)
+			return DefaultTile;
+		size_t Index = X + Y * Width;
+		if (Index >= Tiles.size())
+			return DefaultTile;
+		return Tiles[Index];
+	}
+
+	void setHeight(int X, int Y, int Height) {
+		for(int i = 0; i < 4; ++i)
+			get(X, Y).setHeight(i, Height);
+		get(X + 1, Y + 1).setHeight(3, Height);
+		get(X - 1, Y + 1).setHeight(2, Height);
+		get(X - 1, Y - 1).setHeight(1, Height);
+		get(X + 1, Y - 1).setHeight(0, Height);
+
+		get(X + 1, Y).setHeight(0, Height);
+		get(X + 1, Y).setHeight(3, Height);
+
+		get(X - 1, Y).setHeight(1, Height);
+		get(X - 1, Y).setHeight(2, Height);
+
+		get(X, Y - 1).setHeight(0, Height);
+		get(X, Y - 1).setHeight(1, Height);
+
+		get(X, Y + 1).setHeight(2, Height);
+		get(X, Y + 1).setHeight(3, Height);
+	}
+
+	int getWidth() {
+		return Width;
+	}
+
+	int getHeight() {
+		return Height;
+	}
+
+};
+
+class TileRenderer {
+
+	std::shared_ptr<TexRec> Rec;
+
+	static constexpr float SIZE = 0.1f;
+	static constexpr float HEIGHT = 0.02f;
+
+	bool IsWater = false;
+
+	int x = 0;
+	int y = 0;
+
+public:
+	TileRenderer() {
+	}
+	TileRenderer(Tile &T) {
+		float xOff = SIZE * T.getX();
+		float yOff = SIZE * T.getY();
+		Rec.reset(new TexRec(T.getY() != 8 ? "grass.bmp" : "street.bmp",
+												 {xOff       , HEIGHT * T.getHeight(0), SIZE + yOff},
+												 {SIZE + xOff, HEIGHT * T.getHeight(1), SIZE + yOff},
+												 {SIZE + xOff, HEIGHT * T.getHeight(2), yOff       },
+												 {xOff       , HEIGHT * T.getHeight(3), yOff       }));
+	}
+	// for water
+	TileRenderer(int x, int y) : x(x), y(y){
 		float xOff = SIZE * x;
 		float yOff = SIZE * y;
-		Rec.reset(new TexRec(y != 8 ? "grass.bmp" : "street.bmp",
-												 {xOff       , 0, SIZE + yOff},
-												 {SIZE + xOff, 0, SIZE + yOff},
-												 {SIZE + xOff, 0, yOff       },
-												 {xOff       , 0, yOff       }));
+		Rec.reset(new TexRec("water.bmp",
+												 {xOff       , HEIGHT * -0.5f, SIZE + yOff},
+												 {SIZE + xOff, HEIGHT * -0.5f, SIZE + yOff},
+												 {SIZE + xOff, HEIGHT * -0.5f, yOff       },
+												 {xOff       , HEIGHT * -0.5f, yOff       }));
+		IsWater = true;
+
 	}
 
 	void draw() {
+		if (IsWater) {
+
+		}
 		Rec->draw();
 	}
 
 };
 
+
 class FPSCounter {
 	unsigned frames = 0;
 	std::chrono::steady_clock::time_point lastStart;
+
 public:
 	FPSCounter() {
 		lastStart = std::chrono::steady_clock::now();
@@ -250,6 +363,19 @@ int main( void ) {
 		getchar();
 		return -1;
 	}
+
+	TileMap Map(100, 100);
+	for (unsigned x = 0; x < Map.getWidth(); x++) {
+		for (unsigned y = 0; y < Map.getHeight(); y++) {
+			Map.get(x, y) = Tile(x, y);
+		}
+	}
+
+
+	Map.setHeight(8, 8, 1);
+	Map.setHeight(8, 9, 1);
+	Map.setHeight(9, 9, 2);
+	Map.setHeight(11, 11, -1);
 
 	FPSCounter Counter;
 
@@ -313,10 +439,12 @@ int main( void ) {
 
 	{
 
-		std::vector<Tile> tiles;
-		for (unsigned x = 0; x < 210; x++) {
-			for (unsigned y = 0; y < 210; y++) {
-				tiles.emplace_back(x, y);
+		std::vector<TileRenderer> tiles;
+		for (unsigned x = 0; x < Map.getWidth(); x++) {
+			for (unsigned y = 0; y < Map.getHeight(); y++) {
+				tiles.emplace_back(Map.get(x, y));
+				if (Map.get(x, y).hasWater())
+					tiles.emplace_back(x, y);
 			}
 		}
 
@@ -339,7 +467,7 @@ int main( void ) {
 			// in the "MVP" uniform
 			glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
-			for (Tile &t : tiles)
+			for (TileRenderer &t : tiles)
 				t.draw();
 
 			// Swap buffers
