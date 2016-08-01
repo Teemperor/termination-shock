@@ -20,6 +20,7 @@ using namespace glm;
 #include <vector>
 #include <iostream>
 #include <memory>
+#include <chrono>
 
 class Texture {
 
@@ -53,8 +54,13 @@ class TexRec {
 	std::vector<GLfloat> vertexes;
 	std::vector<GLfloat> uvs;
 
+	GLuint VertexArrayID;
+
 public:
 	TexRec(const std::string &Texture, v3 a, v3 b, v3 c, v3 d) {
+		glGenVertexArrays(1, &VertexArrayID);
+		glBindVertexArray(VertexArrayID);
+
 		// Our vertices. Tree consecutive floats give a 3D vertex; Three consecutive vertices give a triangle.
 		// A cube has 6 faces with 2 triangles each, so this makes 6*2=12 triangles, and 12*3 vertices
 		vertexes = {
@@ -90,6 +96,7 @@ public:
 	~TexRec() {
 		glDeleteBuffers(1, &vertexbuffer);
 		glDeleteBuffers(1, &uvbuffer);
+		glDeleteVertexArrays(1, &VertexArrayID);
 	}
 
 	void update() {
@@ -160,6 +167,25 @@ public:
 
 };
 
+class FPSCounter {
+	unsigned frames = 0;
+	std::chrono::steady_clock::time_point lastStart;
+public:
+	FPSCounter() {
+		lastStart = std::chrono::steady_clock::now();
+	}
+	void addFrame() {
+		++frames;
+		auto diff = std::chrono::steady_clock::now() - lastStart;
+		auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(diff).count();
+		if (millis >= 1000) {
+			lastStart = std::chrono::steady_clock::now();
+			std::cout << (frames / (millis / 1000.0)) << std::endl;
+			frames = 0;
+		}
+	}
+};
+
 int main( void ) {
 	// Initialise GLFW
 	if (!glfwInit()) {
@@ -167,6 +193,8 @@ int main( void ) {
 		getchar();
 		return -1;
 	}
+
+	FPSCounter Counter;
 
 	glfwWindowHint(GLFW_SAMPLES, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -216,9 +244,6 @@ int main( void ) {
 	// Cull triangles which normal is not towards the camera
 	//glEnable(GL_CULL_FACE);
 
-	GLuint VertexArrayID;
-	glGenVertexArrays(1, &VertexArrayID);
-	glBindVertexArray(VertexArrayID);
 
 	// Create and compile our GLSL program from the shaders
 	GLuint programID = LoadShaders("TransformVertexShader.vertexshader",
@@ -274,6 +299,8 @@ int main( void ) {
 			glfwSwapBuffers(window);
 			glfwPollEvents();
 
+			Counter.addFrame();
+
 		} // Check if the ESC key was pressed or the window was closed
 		while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS &&
 					 glfwWindowShouldClose(window) == 0);
@@ -283,7 +310,6 @@ int main( void ) {
 	// Cleanup VBO and shader
 	glDeleteProgram(programID);
 	glDeleteTextures(1, &TextureID);
-	glDeleteVertexArrays(1, &VertexArrayID);
 
 	// Close OpenGL window and terminate GLFW
 	glfwTerminate();
