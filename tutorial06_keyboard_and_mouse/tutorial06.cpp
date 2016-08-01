@@ -170,8 +170,10 @@ public:
 		update();
 	}
 
-	void draw() {
+	void draw(float alpha) {
 		Texture.activate();
+
+		glUniform1f(1, alpha);
 
 		// 1rst attribute buffer : vertices
 		glEnableVertexAttribArray(0);
@@ -337,8 +339,11 @@ public:
 		float xOff = SIZE * T.getX();
 		float yOff = SIZE * T.getY();
 		std::string Texture = T.getY() != 13 ? "grass.bmp" : "street.bmp";
-		if (T.isCliff() || T.hasWater())
+		if (T.hasWater())
+			Texture = "sand.bmp";
+		else if (T.isCliff())
 			Texture = "stones.bmp";
+
 		Rec.reset(new TexRec(Texture,
 												 {xOff       , HEIGHT * T.getHeight(0), SIZE + yOff},
 												 {SIZE + xOff, HEIGHT * T.getHeight(1), SIZE + yOff},
@@ -367,7 +372,7 @@ public:
 			float waterDwindle = std::cos(chr::duration_cast<chr::milliseconds>(tp.time_since_epoch()).count() / 1000.0);
 			Rec->setHeights(HEIGHT * -0.25f + HEIGHT * 0.13f * waterDwindle);
 		}
-		Rec->draw();
+		Rec->draw(IsWater ? 0.6f : 1.0f);
 	}
 
 };
@@ -401,33 +406,8 @@ int main( void ) {
 		return -1;
 	}
 
-	TileMap Map(100, 100);
-	/*for (unsigned x = 0; x < Map.getWidth(); x++) {
-		for (unsigned y = 0; y < Map.getHeight(); y++) {
-			Map.get(x, y) = Tile(x, y);
-		}
-	}
+	TileMap Map(90, 90);
 
-
-	Map.setHeight(8, 8, 1);
-	Map.setHeight(8, 9, 1);
-	Map.setHeight(9, 9, 2);
-	Map.setHeight(19, 19, 3);
-	Map.setHeight(11, 11, -1);
-
-	Map.setHeight(89, 89, 6);
-	Map.setHeight(89, 87, 6);
-	Map.setHeight(89, 88, 6);
-	Map.setHeight(88, 89, 6);
-	Map.setHeight(81, 81, -1);
-
-	for (int x = 44; x < 66; x++) {
-		for (int y = 22; y < 33; y++) {
-
-			Map.setHeight(x, y, -1);
-		}
-	}
-*/
 	FPSCounter Counter;
 
 	glfwWindowHint(GLFW_SAMPLES, 4);
@@ -493,11 +473,12 @@ int main( void ) {
 	{
 
 		std::vector<TileRenderer> tiles;
+		std::vector<TileRenderer> waterTiles;
 		for (unsigned x = 0; x < Map.getWidth(); x++) {
 			for (unsigned y = 0; y < Map.getHeight(); y++) {
 				tiles.emplace_back(Map.get(x, y));
 				if (Map.get(x, y).hasWater())
-					tiles.emplace_back(x, y);
+					waterTiles.emplace_back(x, y);
 			}
 		}
 
@@ -521,6 +502,8 @@ int main( void ) {
 			glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
 			for (TileRenderer &t : tiles)
+				t.draw();
+			for (TileRenderer &t : waterTiles)
 				t.draw();
 
 			// Swap buffers
