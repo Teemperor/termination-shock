@@ -22,6 +22,7 @@ using namespace glm;
 #include <memory>
 #include <chrono>
 #include <unordered_map>
+#include <algorithm>
 
 class Texture {
 
@@ -235,6 +236,13 @@ public:
 		return false;
 	}
 
+	bool isCliff() const {
+		auto max = std::max_element(std::begin(Height), std::end(Height));
+		auto min = std::min_element(std::begin(Height), std::end(Height));
+		std::cout << *max << " " << *min << " " << (*max - *min) << std::endl;
+		return (*max - *min) >= 2;
+	}
+
 };
 
 class TileMap {
@@ -307,7 +315,10 @@ public:
 	TileRenderer(Tile &T) {
 		float xOff = SIZE * T.getX();
 		float yOff = SIZE * T.getY();
-		Rec.reset(new TexRec(T.getY() != 8 ? "grass.bmp" : "street.bmp",
+		std::string Texture = T.getY() != 8 ? "grass.bmp" : "street.bmp";
+		if (T.isCliff())
+			Texture = "stones.bmp";
+		Rec.reset(new TexRec(Texture,
 												 {xOff       , HEIGHT * T.getHeight(0), SIZE + yOff},
 												 {SIZE + xOff, HEIGHT * T.getHeight(1), SIZE + yOff},
 												 {SIZE + xOff, HEIGHT * T.getHeight(2), yOff       },
@@ -375,6 +386,7 @@ int main( void ) {
 	Map.setHeight(8, 8, 1);
 	Map.setHeight(8, 9, 1);
 	Map.setHeight(9, 9, 2);
+	Map.setHeight(19, 19, 3);
 	Map.setHeight(11, 11, -1);
 
 	FPSCounter Counter;
