@@ -19,16 +19,14 @@ using namespace glm;
 #include <common/controls.hpp>
 #include <vector>
 #include <iostream>
-
-#define SIZE 0.1f
-
-class TexRec {
+#include <memory>
 
 
-
+struct v3 {
+	float x, y, z;
 };
 
-class Tile {
+class TexRec {
 
 	GLuint vertexbuffer;
 	GLuint uvbuffer;
@@ -37,22 +35,16 @@ class Tile {
 	std::vector<GLfloat> uvs;
 
 public:
-	Tile() {
-	}
-	Tile(int x, int y) {
-		std::cerr << "FOO" << std::endl;
-		float xoff = x * SIZE;
-		float yoff = y * SIZE;
-
+	TexRec(const std::string &Texture, v3 a, v3 b, v3 c, v3 d) {
 		// Our vertices. Tree consecutive floats give a 3D vertex; Three consecutive vertices give a triangle.
 		// A cube has 6 faces with 2 triangles each, so this makes 6*2=12 triangles, and 12*3 vertices
 		vertexes = {
-			0.0f + xoff, 0.0f, 0.0f + yoff,
-			SIZE + xoff, 0.0f, 0.0f + yoff,
-			SIZE + xoff, 0.0f, SIZE + yoff,
-			SIZE + xoff, 0.0f, SIZE + yoff,
-			0.0f + xoff, 0.0f, SIZE + yoff,
-			0.0f + xoff, 0.0f, 0.0f + yoff
+			d.x, d.y, d.z,
+			c.x, c.y, c.z,
+			b.x, b.y, b.z,
+			b.x, b.y, b.z,
+			a.x, a.y, a.z,
+			d.x, d.y, d.z,
 		};
 
 		// Two UV coordinatesfor each vertex. They were created withe Blender.
@@ -74,7 +66,9 @@ public:
 		glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(GLfloat), uvs.data(), GL_STATIC_DRAW);
 	}
 
-	~Tile() {
+	TexRec(const TexRec &Other) = delete;
+
+	~TexRec() {
 		if (!vertexes.empty()) {
 			//assert(false);
 			//glDeleteBuffers(1, &vertexbuffer);
@@ -112,6 +106,30 @@ public:
 
 		glDisableVertexAttribArray(0);
 		glDisableVertexAttribArray(1);
+	}
+};
+
+#define SIZE 0.1f
+
+class Tile {
+
+	std::shared_ptr<TexRec> Rec;
+
+public:
+	Tile() {
+	}
+	Tile(int x, int y) {
+		float xOff = SIZE * x;
+		float yOff = SIZE * y;
+		Rec.reset(new TexRec("",
+												 {xOff       , 0, SIZE + yOff},
+												 {SIZE + xOff, 0, SIZE + yOff},
+												 {SIZE + xOff, 0, yOff       },
+												 {xOff       , 0, yOff       }));
+	}
+
+	void draw() {
+		Rec->draw();
 	}
 
 };
@@ -223,6 +241,7 @@ int main( void ) {
 							 GL_STATIC_DRAW);
 
 	{
+
 		std::vector<Tile> tiles;
 		for (unsigned x = 0; x < 110; x++) {
 			for (unsigned y = 0; y < 110; y++) {
