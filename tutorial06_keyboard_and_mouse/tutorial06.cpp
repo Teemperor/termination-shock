@@ -21,26 +21,79 @@ using namespace glm;
 #include <iostream>
 #include <memory>
 #include <chrono>
+#include <unordered_map>
 
 class Texture {
 
+	GLuint Handle;
+
 public:
 	Texture() {
-
+	}
+	Texture(const std::string &Path) {
+		Handle = loadBMP_custom(Path.c_str());
 	}
 	void activate() {
-
+		// Bind our texture in Texture Unit 0
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, Handle);
+		// Set our "myTextureSampler" sampler to user Texture Unit 0
+		glUniform1i(Handle, 0);
 	}
 	void clear() {
 
 	}
 };
 
-class TextureManager {
+class TextureID {
+	unsigned ID;
 public:
+	TextureID(unsigned ID) : ID(ID) {
+	}
+	void activate();
+};
+
+
+class TextureManager {
+
+	std::vector<Texture> Textures;
+	std::unordered_map<std::string, unsigned> TexturesNamedToIDs;
+
+	unsigned LastActivatedID = std::numeric_limits<unsigned>::max();
+
+public:
+	TextureManager() {
+	}
+
+	TextureID loadTexture(const std::string &Path) {
+		auto I = TexturesNamedToIDs.find(Path);
+		if (I != TexturesNamedToIDs.end()) {
+			return TextureID(I->second);
+		} else {
+			unsigned OldSize = Textures.size();
+			Textures.push_back(Texture(Path));
+			TexturesNamedToIDs[Path] = OldSize;
+			return TextureID(OldSize);
+		}
+	}
+
+	Texture& operator[](unsigned ID) {
+		return Textures[ID];
+	}
+
+	void activate(unsigned ID) {
+		if (ID != LastActivatedID) {
+			operator[](ID).activate();
+			LastActivatedID = ID;
+		}
+	}
 };
 
 TextureManager TextureManager;
+
+void TextureID::activate() {
+	TextureManager[ID].activate();
+}
 
 struct v3 {
 	float x, y, z;
@@ -56,8 +109,10 @@ class TexRec {
 
 	GLuint VertexArrayID;
 
+	TextureID Texture;
+
 public:
-	TexRec(const std::string &Texture, v3 a, v3 b, v3 c, v3 d) {
+	TexRec(const std::string &TexturePath, v3 a, v3 b, v3 c, v3 d) : Texture(TextureManager.loadTexture(TexturePath)) {
 		glGenVertexArrays(1, &VertexArrayID);
 		glBindVertexArray(VertexArrayID);
 
@@ -110,6 +165,8 @@ public:
 	}
 
 	void draw() {
+		Texture.activate();
+
 		// 1rst attribute buffer : vertices
 		glEnableVertexAttribArray(0);
 		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
@@ -135,7 +192,7 @@ public:
 		);
 
 		// Draw the triangle !
-		glDrawArrays(GL_TRIANGLES, 0, (12*3)/6); // 12*3 indices starting at 0 -> 12 triangles
+		glDrawArrays(GL_TRIANGLES, 0, 6); // 12*3 indices starting at 0 -> 12 triangles
 
 		glDisableVertexAttribArray(0);
 		glDisableVertexAttribArray(1);
@@ -154,7 +211,7 @@ public:
 	Tile(int x, int y) {
 		float xOff = SIZE * x;
 		float yOff = SIZE * y;
-		Rec.reset(new TexRec("",
+		Rec.reset(new TexRec(y != 8 ? "grass.bmp" : "street.bmp",
 												 {xOff       , 0, SIZE + yOff},
 												 {SIZE + xOff, 0, SIZE + yOff},
 												 {SIZE + xOff, 0, yOff       },
@@ -234,7 +291,7 @@ int main( void ) {
 	glfwSetCursorPos(window, 1024 / 2, 768 / 2);
 
 	// Dark blue background
-	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
+	glClearColor(0.0f, 0.0f, 0.1f, 0.0f);
 
 	// Enable depth test
 	glEnable(GL_DEPTH_TEST);
@@ -244,7 +301,6 @@ int main( void ) {
 	// Cull triangles which normal is not towards the camera
 	//glEnable(GL_CULL_FACE);
 
-
 	// Create and compile our GLSL program from the shaders
 	GLuint programID = LoadShaders("TransformVertexShader.vertexshader",
 																 "TextureFragmentShader.fragmentshader");
@@ -252,17 +308,14 @@ int main( void ) {
 	// Get a handle for our "MVP" uniform
 	GLuint MatrixID = glGetUniformLocation(programID, "MVP");
 
-	// Load the texture
-	GLuint Texture = loadBMP_custom("uvtemplate.bmp");
-
 	// Get a handle for our "myTextureSampler" uniform
 	GLuint TextureID = glGetUniformLocation(programID, "myTextureSampler");
 
 	{
 
 		std::vector<Tile> tiles;
-		for (unsigned x = 0; x < 110; x++) {
-			for (unsigned y = 0; y < 110; y++) {
+		for (unsigned x = 0; x < 210; x++) {
+			for (unsigned y = 0; y < 210; y++) {
 				tiles.emplace_back(x, y);
 			}
 		}
@@ -285,12 +338,6 @@ int main( void ) {
 			// Send our transformation to the currently bound shader,
 			// in the "MVP" uniform
 			glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
-
-			// Bind our texture in Texture Unit 0
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, Texture);
-			// Set our "myTextureSampler" sampler to user Texture Unit 0
-			glUniform1i(TextureID, 0);
 
 			for (Tile &t : tiles)
 				t.draw();
