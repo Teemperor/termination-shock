@@ -116,7 +116,7 @@ class TexRec {
 	TextureID Texture;
 
 public:
-	TexRec(const std::string &TexturePath, v3 a, v3 b, v3 c, v3 d) : Texture(TextureManager.loadTexture(TexturePath)) {
+	TexRec(const std::string &TexturePath, v3 d, v3 c, v3 b, v3 a) : Texture(TextureManager.loadTexture(TexturePath)) {
 		glGenVertexArrays(1, &VertexArrayID);
 		glBindVertexArray(VertexArrayID);
 
@@ -161,6 +161,16 @@ public:
 	void update() {
 		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
 		glBufferSubData(GL_ARRAY_BUFFER, 0, vertexes.size() * sizeof(GLfloat), vertexes.data());
+	}
+
+	void setHeights(float ah, float bh, float ch, float dh) {
+		vertexes[1] = dh;
+		vertexes[4] = ch;
+		vertexes[7] = bh;
+		vertexes[10] = bh;
+		vertexes[13] = ah;
+		vertexes[16] = dh;
+		update();
 	}
 
 	void setHeights(float h) {
@@ -210,10 +220,20 @@ public:
 class Tile {
 	int Height[4] = {0, 0, 0, 0};
 	int X = -1, Y = -1;
+	bool Forest = false;
+	bool City = false;
 public:
 	Tile() {
 	}
 	Tile(int X, int Y) : X(X), Y(Y) {
+	}
+
+	void makeForest() {
+		Forest = true;
+	}
+
+	void makeCity() {
+		City = true;
 	}
 
 	int getHeight(int i) const {
@@ -230,6 +250,14 @@ public:
 
 	int getY() const {
 		return Y;
+	}
+
+	bool isForest() const {
+		return Forest;
+	}
+
+	bool isCity() const {
+		return City;
 	}
 
 	operator bool() const {
@@ -258,13 +286,24 @@ class TileMap {
 
 	Tile DefaultTile;
 
-	void generate() {
+	double percentageWater() {
+		unsigned waterTiles = 0;
+		for (int x = 0; x < Width; ++x) {
+			for (int y = 0; y < Height; ++y) {
+			  if (get(x, y).hasWater())
+					++waterTiles;
+			}
+		}
+		std::cout << (waterTiles / (double) (Width * Height)) << std::endl;
+		return waterTiles / (double) (Width * Height);
+	}
+
+	void generate(int Seed) {
 		noise::module::Perlin myModule;
-		double offset = std::random_device()();
-		std::cerr << offset << std::endl;
+		double offset = Seed;
 
 		for (int x = 0; x < Width; ++x) {
-			for (int y = 0; y < Width; ++y) {
+			for (int y = 0; y < Height; ++y) {
 				get(x, y) = Tile(x, y);
 				double factor = 40.0;
 				int height = (int) (myModule.GetValue(offset + x / factor, offset + y / factor, offset + 0.5) * 10);
@@ -272,12 +311,37 @@ class TileMap {
 				setHeight(x, y, height);
 			}
 		}
+		offset = Seed + Seed + 1500;
+
+		for (int x = 0; x < Width; ++x) {
+			for (int y = 0; y < Height; ++y) {
+				double factor = 20.0;
+				double value = myModule.GetValue(offset - x / factor, offset - y / factor, offset + 0.9);
+
+				if (value > 0.3)
+					get(x, y).makeForest();
+			}
+		}
+		offset = Seed + Seed + Seed + 3000;
+
+		for (int x = 0; x < Width; ++x) {
+			for (int y = 0; y < Height; ++y) {
+				double factor = 40.0;
+				double value = myModule.GetValue(offset - x / factor, offset - y / factor, offset + 0.9);
+
+				if (value > 0.7)
+					get(x, y).makeCity();
+			}
+		}
 	}
 
 public:
-	TileMap(int Width, int Height) : Width(Width), Height(Height) {
+	TileMap(int Width, int Height, int Seed = 25) : Width(Width), Height(Height) {
 		Tiles.resize(Width * Height);
-		generate();
+		do {
+			generate(Seed);
+			Seed += 5;
+		} while (percentageWater() > 0.60);
 	}
 
 	Tile& get(int X, int Y) {
@@ -343,6 +407,10 @@ public:
 			Texture = "sand.bmp";
 		else if (T.isCliff())
 			Texture = "stones.bmp";
+		else if (T.isForest())
+			Texture = "forest.bmp";
+		else if (T.isCity())
+			Texture = "city.bmp";
 
 		Rec.reset(new TexRec(Texture,
 												 {xOff       , HEIGHT * T.getHeight(0), SIZE + yOff},
@@ -363,16 +431,17 @@ public:
 
 	}
 
-	void draw() {
+	void draw(double time) {
 		if (IsWater) {
-			namespace chr = std::chrono;
-
-			chr::time_point<chr::steady_clock> tp = chr::steady_clock::now();
-
-			float waterDwindle = std::cos(chr::duration_cast<chr::milliseconds>(tp.time_since_epoch()).count() / 1000.0);
-			Rec->setHeights(HEIGHT * -0.25f + HEIGHT * 0.13f * waterDwindle);
+			float BaseZ = HEIGHT * -0.25f;
+			float WaveHeight = HEIGHT * 0.13f;
+			float WaveSpeed = 10;
+			Rec->setHeights(BaseZ + WaveHeight * std::cos(time + x * WaveSpeed),
+											BaseZ + WaveHeight * std::cos(time + (x + 1) * WaveSpeed),
+											BaseZ + WaveHeight * std::cos(time + (x + 1) * WaveSpeed),
+											BaseZ + WaveHeight * std::cos(time + x * WaveSpeed));
 		}
-		Rec->draw(IsWater ? 0.6f : 1.0f);
+		Rec->draw(1.0f);
 	}
 
 };
@@ -406,7 +475,7 @@ int main( void ) {
 		return -1;
 	}
 
-	TileMap Map(90, 90);
+	TileMap Map(110, 110);
 
 	FPSCounter Counter;
 
@@ -458,7 +527,7 @@ int main( void ) {
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	// Cull triangles which normal is not towards the camera
-	//glEnable(GL_CULL_FACE);
+	glEnable(GL_CULL_FACE);
 
 	// Create and compile our GLSL program from the shaders
 	GLuint programID = LoadShaders("TransformVertexShader.vertexshader",
@@ -501,10 +570,17 @@ int main( void ) {
 			// in the "MVP" uniform
 			glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
+
+			namespace chr = std::chrono;
+
+			chr::time_point<chr::steady_clock> tp = chr::steady_clock::now();
+
+			double time = chr::duration_cast<chr::milliseconds>(tp.time_since_epoch()).count() / 1000.0;
+
 			for (TileRenderer &t : tiles)
-				t.draw();
+				t.draw(time);
 			for (TileRenderer &t : waterTiles)
-				t.draw();
+				t.draw(time);
 
 			// Swap buffers
 			glfwSwapBuffers(window);
