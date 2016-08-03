@@ -27,6 +27,7 @@ using namespace glm;
 #include <algorithm>
 #include <random>
 #include <math.h>
+#include <map>
 
 # define M_PI           3.14159265358979323846  /* pi */
 
@@ -58,13 +59,17 @@ public:
 	TextureID(unsigned ID) : ID(ID) {
 	}
 	void activate();
+
+	std::string getPath();
 };
+
 
 
 class TextureManager {
 
 	std::vector<Texture> Textures;
 	std::unordered_map<std::string, unsigned> TexturesNamedToIDs;
+	std::unordered_map<unsigned, std::string> IDsToTextureNames;
 
 	unsigned LastActivatedID = std::numeric_limits<unsigned>::max();
 
@@ -80,12 +85,17 @@ public:
 			unsigned OldSize = Textures.size();
 			Textures.push_back(Texture(Path));
 			TexturesNamedToIDs[Path] = OldSize;
+			IDsToTextureNames[OldSize] = Path;
 			return TextureID(OldSize);
 		}
 	}
 
 	Texture& operator[](unsigned ID) {
 		return Textures[ID];
+	}
+
+	std::string getName(unsigned ID) {
+		return IDsToTextureNames[ID];
 	}
 
 	void activate(unsigned ID) {
@@ -102,11 +112,19 @@ void TextureID::activate() {
 	TextureManager[ID].activate();
 }
 
+std::string TextureID::getPath() {
+	return TextureManager.getName(ID);
+}
+
 struct v3 {
 	float x, y, z;
 };
 
+class TexRecArray;
+
 class TexRec {
+
+	friend class TexRecArray;
 
 	GLuint vertexbuffer;
 	GLuint uvbuffer;
@@ -176,6 +194,10 @@ public:
 		update();
 	}
 
+	std::string getTextureName() {
+		return Texture.getPath();
+	}
+
 	void setHeights(float h) {
 		for (int i = 0; i < 6; ++i) {
 			vertexes[1 + i * 3] = h;
@@ -217,6 +239,117 @@ public:
 
 		glDisableVertexAttribArray(0);
 		glDisableVertexAttribArray(1);
+	}
+};
+
+class TexRecArray {
+
+	GLuint vertexbuffer;
+	GLuint uvbuffer;
+
+	std::vector<GLfloat> vertexes;
+	std::vector<GLfloat> uvs;
+
+	GLuint VertexArrayID;
+
+	TextureID Texture;
+
+	bool Finalized = false;
+
+public:
+	TexRecArray(const std::string &TexturePath) : Texture(TextureManager.loadTexture(TexturePath)) {
+	}
+
+	~TexRecArray() {
+		if (!Finalized)
+			return;
+		glDeleteBuffers(1, &vertexbuffer);
+		glDeleteBuffers(1, &uvbuffer);
+		glDeleteVertexArrays(1, &VertexArrayID);
+	}
+
+	void add(TexRec &Rec) {
+		vertexes.insert(vertexes.begin(), Rec.vertexes.begin(), Rec.vertexes.end());
+		uvs.insert(uvs.begin(), Rec.uvs.begin(), Rec.uvs.end());
+	}
+
+	void finalize() {
+		assert(!Finalized);
+		Finalized = true;
+
+		glGenVertexArrays(1, &VertexArrayID);
+		glBindVertexArray(VertexArrayID);
+
+		glGenBuffers(1, &vertexbuffer);
+		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+		glBufferData(GL_ARRAY_BUFFER, vertexes.size() * sizeof(GLfloat), vertexes.data(), GL_STATIC_DRAW);
+
+		glGenBuffers(1, &uvbuffer);
+		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
+		glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(GLfloat), uvs.data(), GL_STATIC_DRAW);
+	}
+
+	void draw() {
+		Texture.activate();
+
+		glUniform1f(1, 1.0f);
+
+		// 1rst attribute buffer : vertices
+		glEnableVertexAttribArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+		glVertexAttribPointer(
+			0,                  // attribute. No particular reason for 0, but must match the layout in the shader.
+			3,                  // size
+			GL_FLOAT,           // type
+			GL_FALSE,           // normalized?
+			0,                  // stride
+			(void*)0            // array buffer offset
+		);
+
+		// 2nd attribute buffer : UVs
+		glEnableVertexAttribArray(1);
+		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
+		glVertexAttribPointer(
+			1,                                // attribute. No particular reason for 1, but must match the layout in the shader.
+			2,                                // size : U+V => 2
+			GL_FLOAT,                         // type
+			GL_FALSE,                         // normalized?
+			0,                                // stride
+			(void*)0                          // array buffer offset
+		);
+
+		// Draw the triangle !
+		glDrawArrays(GL_TRIANGLES, 0, vertexes.size() / 3);
+
+		glDisableVertexAttribArray(0);
+		glDisableVertexAttribArray(1);
+	}
+};
+
+class TexRecArrayMap {
+	std::map<std::string, TexRecArray*> Arrays;
+public:
+
+	void add(TexRec &Rec) {
+		auto I = Arrays.find(Rec.getTextureName());
+		if (I == Arrays.end()) {
+			Arrays[Rec.getTextureName()] = new TexRecArray(Rec.getTextureName());
+			Arrays[Rec.getTextureName()]->add(Rec);
+		} else {
+			I->second->add(Rec);
+		}
+	}
+
+	void finalize() {
+		for (auto &Pair : Arrays) {
+			Pair.second->finalize();
+		}
+	}
+
+	void draw() {
+		for (auto &Pair : Arrays) {
+			Pair.second->draw();
+		}
 	}
 };
 
@@ -450,6 +583,11 @@ public:
 		for (auto &Rec : Recs)
 			Rec->draw(1.0f);
 	}
+
+	void addRecsTo(TexRecArrayMap& ArrayMap) {
+		for (auto& Rec : Recs)
+			ArrayMap.add(*Rec);
+	}
 };
 
 class TileRenderer {
@@ -510,10 +648,14 @@ public:
 											BaseZ + WaveHeight * std::cos(time + (x + 1) * WaveSpeed),
 											BaseZ + WaveHeight * std::cos(time + (x + 1) * WaveSpeed),
 											BaseZ + WaveHeight * std::cos(time + x * WaveSpeed));
+			Rec->draw(1.0f);
 		}
-		Rec->draw(1.0f);
+	}
+
+	void addRecsTo(TexRecArrayMap &ArrayMap) {
+		ArrayMap.add(*Rec);
 		if (t)
-			t->draw();
+			t->addRecsTo(ArrayMap);
 	}
 
 };
@@ -547,7 +689,8 @@ int main( void ) {
 		return -1;
 	}
 
-	TileMap Map(110, 110, (int) (getRandomFrac() * 200000));
+	//TileMap Map(110, 110, (int) (getRandomFrac() * 200000));
+	TileMap Map(110, 110, 200000);
 
 	FPSCounter Counter;
 
@@ -613,16 +756,20 @@ int main( void ) {
 
 	{
 
-		std::vector<TileRenderer> tiles;
+		TexRecArrayMap StaticRecs;
+
 		std::vector<TileRenderer> waterTiles;
 		for (unsigned x = 0; x < Map.getWidth(); x++) {
 			for (unsigned y = 0; y < Map.getHeight(); y++) {
-				if (!Map.get(x, y).isFullWater())
-					tiles.emplace_back(Map.get(x, y));
+				if (!Map.get(x, y).isFullWater()) {
+					TileRenderer renderer(Map.get(x, y));
+					renderer.addRecsTo(StaticRecs);
+				}
 				if (Map.get(x, y).hasWater())
 					waterTiles.emplace_back(x, y);
 			}
 		}
+		StaticRecs.finalize();
 
 		do {
 
@@ -650,10 +797,12 @@ int main( void ) {
 
 			double time = chr::duration_cast<chr::milliseconds>(tp.time_since_epoch()).count() / 1000.0;
 
-			for (TileRenderer &t : tiles)
-				t.draw(time);
-			for (TileRenderer &t : waterTiles)
-				t.draw(time);
+			//for (TileRenderer &t : tiles)
+			//	t.draw(time);
+			StaticRecs.draw();
+
+			//for (TileRenderer &t : waterTiles)
+			//	t.draw(time);
 
 			// Swap buffers
 			glfwSwapBuffers(window);
