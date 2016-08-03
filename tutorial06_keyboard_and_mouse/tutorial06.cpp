@@ -26,6 +26,9 @@ using namespace glm;
 #include <unordered_map>
 #include <algorithm>
 #include <random>
+#include <math.h>
+
+# define M_PI           3.14159265358979323846  /* pi */
 
 class Texture {
 
@@ -253,6 +256,10 @@ public:
 	}
 
 	bool isForest() const {
+		if (isCity())
+			return false;
+		if (hasWater())
+			return false;
 		return Forest;
 	}
 
@@ -269,6 +276,13 @@ public:
 			if (Height[i] < 0)
 				return true;
 		return false;
+	}
+
+	bool isFullWater() const {
+		for (int i = 0; i < 4; ++i)
+			if (Height[i] >= 0)
+				return false;
+		return true;
 	}
 
 	bool isCliff() const {
@@ -384,57 +398,113 @@ public:
 
 };
 
+constexpr float TILE_SIZE = 0.1f;
+constexpr float TILE_HEIGHT = 0.02f;
+
+
+double getRandomFrac() {
+	static std::random_device rd; // obtain a random number from hardware
+	static std::mt19937 eng(rd()); // seed the generator
+	static std::uniform_real_distribution<> distr(-1.0, 1.0); // define the range
+	return distr(eng);
+}
+
+class Tree {
+	std::vector<std::shared_ptr<TexRec> > Recs;
+
+	float centerX, centerY;
+
+	void makeHex(float HeightBottom, float HeightTop, float RadiusBottom, float RadiusTop) {
+		std::vector<std::pair<float, float> > BottomCoords;
+		std::vector<std::pair<float, float> > TopCoords;
+		float staticRot = getRandomFrac()* (2 * M_PI) / 6;
+		for (int i = 0; i <= 6; ++i) {
+			float dx = std::cos(staticRot + i * (2 * M_PI) / 6);
+			float dy = std::sin(staticRot + i * (2 * M_PI) / 6);
+			BottomCoords.push_back(std::make_pair(centerX + dx * RadiusBottom, centerY + dy * RadiusBottom));
+			TopCoords.push_back(std::make_pair(centerX + dx * RadiusTop, centerY + dy * RadiusTop));
+		}
+
+		for (int i = 1; i <= 6; ++i)
+		  Recs.push_back(std::shared_ptr<TexRec>(new TexRec("forest.bmp",
+				{BottomCoords[i - 1].first, HeightBottom, BottomCoords[i - 1].second},
+																												{BottomCoords[i].first, HeightBottom, BottomCoords[i].second},
+																												{TopCoords[i].first, HeightTop, TopCoords[i].second},
+																												{TopCoords[i - 1].first, HeightTop, TopCoords[i - 1].second}
+			)));
+	}
+
+public:
+	Tree() {
+	}
+	Tree(int x, int y, int height) {
+		centerX = TILE_SIZE * (x + 0.5f) + getRandomFrac() * TILE_SIZE / 4;
+		centerY = TILE_SIZE * (y + 0.5f) + getRandomFrac() * TILE_SIZE / 4;
+		float Scale = TILE_HEIGHT + getRandomFrac() * TILE_HEIGHT / 8;
+		makeHex(height * Scale, (height + 2) * Scale, TILE_SIZE * 0.45f, TILE_SIZE * 0.2f);
+		makeHex((height + 2) * Scale, (height + 4) * Scale, TILE_SIZE * 0.3f, TILE_SIZE * 0.1f);
+		makeHex((height + 4) * Scale, (height + 6) * Scale, TILE_SIZE * 0.15f, 0);
+	}
+
+	void draw() {
+		for (auto &Rec : Recs)
+			Rec->draw(1.0f);
+	}
+};
+
 class TileRenderer {
 
 	std::shared_ptr<TexRec> Rec;
-
-	static constexpr float SIZE = 0.1f;
-	static constexpr float HEIGHT = 0.02f;
 
 	bool IsWater = false;
 
 	int x = 0;
 	int y = 0;
 
+	std::shared_ptr<Tree> t;
+
 public:
 	TileRenderer() {
 	}
 	TileRenderer(Tile &T) {
-		float xOff = SIZE * T.getX();
-		float yOff = SIZE * T.getY();
+		float xOff = TILE_SIZE * T.getX();
+		float yOff = TILE_SIZE * T.getY();
 		std::string Texture = T.getY() != 13 ? "grass.bmp" : "street.bmp";
 		if (T.hasWater())
 			Texture = "sand.bmp";
+		else if (T.isForest())
+			Texture = "sand.bmp";
 		else if (T.isCliff())
 			Texture = "stones.bmp";
-		else if (T.isForest())
-			Texture = "forest.bmp";
 		else if (T.isCity())
 			Texture = "city.bmp";
 
 		Rec.reset(new TexRec(Texture,
-												 {xOff       , HEIGHT * T.getHeight(0), SIZE + yOff},
-												 {SIZE + xOff, HEIGHT * T.getHeight(1), SIZE + yOff},
-												 {SIZE + xOff, HEIGHT * T.getHeight(2), yOff       },
-												 {xOff       , HEIGHT * T.getHeight(3), yOff       }));
+												 {xOff       , TILE_HEIGHT * T.getHeight(0), TILE_SIZE + yOff},
+												 {TILE_SIZE + xOff, TILE_HEIGHT * T.getHeight(1), TILE_SIZE + yOff},
+												 {TILE_SIZE + xOff, TILE_HEIGHT * T.getHeight(2), yOff       },
+												 {xOff       , TILE_HEIGHT * T.getHeight(3), yOff       }));
+
+		if (T.isForest())
+			t.reset(new Tree(T.getX(), T.getY(), T.getHeight(0)));
 	}
 	// for water
 	TileRenderer(int x, int y) : x(x), y(y){
-		float xOff = SIZE * x;
-		float yOff = SIZE * y;
+		float xOff = TILE_SIZE * x;
+		float yOff = TILE_SIZE * y;
 		Rec.reset(new TexRec("water.bmp",
-												 {xOff       , HEIGHT * -0.5f, SIZE + yOff},
-												 {SIZE + xOff, HEIGHT * -0.5f, SIZE + yOff},
-												 {SIZE + xOff, HEIGHT * -0.5f, yOff       },
-												 {xOff       , HEIGHT * -0.5f, yOff       }));
+												 {xOff       , TILE_HEIGHT * -0.5f, TILE_SIZE + yOff},
+												 {TILE_SIZE + xOff, TILE_HEIGHT * -0.5f, TILE_SIZE + yOff},
+												 {TILE_SIZE + xOff, TILE_HEIGHT * -0.5f, yOff       },
+												 {xOff       , TILE_HEIGHT * -0.5f, yOff       }));
 		IsWater = true;
 
 	}
 
 	void draw(double time) {
 		if (IsWater) {
-			float BaseZ = HEIGHT * -0.25f;
-			float WaveHeight = HEIGHT * 0.13f;
+			float BaseZ = TILE_HEIGHT * -0.25f;
+			float WaveHeight = TILE_HEIGHT * 0.13f;
 			float WaveSpeed = 10;
 			Rec->setHeights(BaseZ + WaveHeight * std::cos(time + x * WaveSpeed),
 											BaseZ + WaveHeight * std::cos(time + (x + 1) * WaveSpeed),
@@ -442,6 +512,8 @@ public:
 											BaseZ + WaveHeight * std::cos(time + x * WaveSpeed));
 		}
 		Rec->draw(1.0f);
+		if (t)
+			t->draw();
 	}
 
 };
@@ -475,7 +547,7 @@ int main( void ) {
 		return -1;
 	}
 
-	TileMap Map(110, 110);
+	TileMap Map(110, 110, (int) (getRandomFrac() * 200000));
 
 	FPSCounter Counter;
 
@@ -527,7 +599,7 @@ int main( void ) {
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	// Cull triangles which normal is not towards the camera
-	glEnable(GL_CULL_FACE);
+	// glEnable(GL_CULL_FACE);
 
 	// Create and compile our GLSL program from the shaders
 	GLuint programID = LoadShaders("TransformVertexShader.vertexshader",
@@ -545,7 +617,8 @@ int main( void ) {
 		std::vector<TileRenderer> waterTiles;
 		for (unsigned x = 0; x < Map.getWidth(); x++) {
 			for (unsigned y = 0; y < Map.getHeight(); y++) {
-				tiles.emplace_back(Map.get(x, y));
+				if (!Map.get(x, y).isFullWater())
+					tiles.emplace_back(Map.get(x, y));
 				if (Map.get(x, y).hasWater())
 					waterTiles.emplace_back(x, y);
 			}
