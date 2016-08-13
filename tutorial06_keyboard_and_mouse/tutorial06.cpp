@@ -28,6 +28,28 @@ using namespace glm;
 #include <random>
 #include <math.h>
 #include <map>
+#include <cstring>
+#include "Map.h"
+
+class FPSCounter {
+	unsigned frames = 0;
+	std::chrono::steady_clock::time_point lastStart;
+
+public:
+	FPSCounter() {
+		lastStart = std::chrono::steady_clock::now();
+	}
+	void addFrame() {
+		++frames;
+		auto diff = std::chrono::steady_clock::now() - lastStart;
+		auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(diff).count();
+		if (millis >= 1000) {
+			lastStart = std::chrono::steady_clock::now();
+			std::cout << (frames / (millis / 1000.0)) << std::endl;
+			frames = 0;
+		}
+	}
+};
 
 # define M_PI           3.14159265358979323846  /* pi */
 
@@ -116,33 +138,23 @@ const std::string& TextureID::getPath() {
 	return TextureManager.getName(ID);
 }
 
-struct v3 {
-	float x, y, z;
+struct v3f {
+	GLfloat x, y, z;
+	v3f(GLfloat x, GLfloat y, GLfloat z) : x(x), y(y), z(z) {
+
+	}
 };
 
-class TexRecArray;
-
-class TexRec {
-
-	friend class TexRecArray;
-
-	GLuint vertexbuffer;
-	GLuint uvbuffer;
+struct Rec {
 
 	std::vector<GLfloat> vertexes;
 	std::vector<GLfloat> uvs;
 
-	GLuint VertexArrayID;
+	Rec(const v3f &d, const v3f &c, const v3f &b, const v3f &a,
+			std::pair<float, float> uvStart, float us, float vs) {
 
-	TextureID Texture;
-
-public:
-	TexRec(const std::string &TexturePath, v3 d, v3 c, v3 b, v3 a) : Texture(TextureManager.loadTexture(TexturePath)) {
-		//glGenVertexArrays(1, &VertexArrayID);
-		//glBindVertexArray(VertexArrayID);
-
-		// Our vertices. Tree consecutive floats give a 3D vertex; Three consecutive vertices give a triangle.
-		// A cube has 6 faces with 2 triangles each, so this makes 6*2=12 triangles, and 12*3 vertices
+		std::pair<float, float> uvEnd = std::make_pair(uvStart.first + us,
+		                                               uvStart.second + vs);
 		vertexes = {
 			d.x, d.y, d.z,
 			c.x, c.y, c.z,
@@ -154,92 +166,15 @@ public:
 
 		// Two UV coordinatesfor each vertex. They were created withe Blender.
 		uvs = {
-			0, 0,
-			1, 0,
-			1, 1,
-			1, 1,
-			0, 1,
-			0, 0,
+			uvStart.first, uvStart.second,
+			uvEnd.first,   uvStart.second,
+			uvEnd.first,   uvEnd.second,
+			uvEnd.first,   uvEnd.second,
+			uvStart.first, uvEnd.second,
+			uvStart.first, uvStart.second,
 		};
-
-		/*glGenBuffers(1, &vertexbuffer);
-		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-		glBufferData(GL_ARRAY_BUFFER, vertexes.size() * sizeof(GLfloat), vertexes.data(), GL_STATIC_DRAW);
-
-		glGenBuffers(1, &uvbuffer);
-		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-		glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(GLfloat), uvs.data(), GL_STATIC_DRAW); */
 	}
 
-	TexRec(const TexRec &Other) = delete;
-
-	~TexRec() {
-		/*glDeleteBuffers(1, &vertexbuffer);
-		glDeleteBuffers(1, &uvbuffer);
-		glDeleteVertexArrays(1, &VertexArrayID); */
-	}
-
-	void update() {
-		//glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-		//glBufferSubData(GL_ARRAY_BUFFER, 0, vertexes.size() * sizeof(GLfloat), vertexes.data());
-	}
-
-	void setHeights(float ah, float bh, float ch, float dh) {
-		vertexes[1] = dh;
-		vertexes[4] = ch;
-		vertexes[7] = bh;
-		vertexes[10] = bh;
-		vertexes[13] = ah;
-		vertexes[16] = dh;
-		update();
-	}
-
-	const std::string& getTextureName() {
-		return Texture.getPath();
-	}
-
-	void setHeights(float h) {
-		for (int i = 0; i < 6; ++i) {
-			vertexes[1 + i * 3] = h;
-		}
-		update();
-	}
-
-	void draw(float alpha) {
-		/*Texture.activate();
-
-		glUniform1f(1, alpha);
-
-		// 1rst attribute buffer : vertices
-		glEnableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-		glVertexAttribPointer(
-			0,                  // attribute. No particular reason for 0, but must match the layout in the shader.
-			3,                  // size
-			GL_FLOAT,           // type
-			GL_FALSE,           // normalized?
-			0,                  // stride
-			(void*)0            // array buffer offset
-		);
-
-		// 2nd attribute buffer : UVs
-		glEnableVertexAttribArray(1);
-		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-		glVertexAttribPointer(
-			1,                                // attribute. No particular reason for 1, but must match the layout in the shader.
-			2,                                // size : U+V => 2
-			GL_FLOAT,                         // type
-			GL_FALSE,                         // normalized?
-			0,                                // stride
-			(void*)0                          // array buffer offset
-		);
-
-		// Draw the triangle !
-		glDrawArrays(GL_TRIANGLES, 0, 6);
-
-		glDisableVertexAttribArray(0);
-		glDisableVertexAttribArray(1); */
-	}
 };
 
 class TexRecArray {
@@ -268,9 +203,19 @@ public:
 		glDeleteVertexArrays(1, &VertexArrayID);
 	}
 
-	void add(TexRec &Rec) {
-		vertexes.insert(vertexes.begin(), Rec.vertexes.begin(), Rec.vertexes.end());
-		uvs.insert(uvs.begin(), Rec.uvs.begin(), Rec.uvs.end());
+	void add(const std::vector<GLfloat> &v, const std::vector<GLfloat> &u) {
+		vertexes.resize(vertexes.size() + 18);
+		std::memcpy(vertexes.data() + vertexes.size() - 18, v.data(), sizeof(GLfloat) * 18);
+		uvs.resize(uvs.size() + 12);
+		std::memcpy(uvs.data() + uvs.size() - 12, u.data(), sizeof(GLfloat) * 12);
+
+		//vertexes.insert(vertexes.begin(), v.begin(), v.end());
+		//uvs.insert(uvs.begin(), u.begin(), u.end());
+	}
+
+	void add(const Rec &R) {
+		vertexes.insert(vertexes.begin(), R.vertexes.begin(), R.vertexes.end());
+		uvs.insert(uvs.begin(), R.uvs.begin(), R.uvs.end());
 	}
 
 	void finalize() {
@@ -326,360 +271,98 @@ public:
 	}
 };
 
-class TexRecArrayMap {
-	std::map<std::string, TexRecArray*> Arrays;
-public:
 
-	void add(TexRec &Rec) {
-		auto I = Arrays.find(Rec.getTextureName());
-		if (I == Arrays.end()) {
-			Arrays[Rec.getTextureName()] = new TexRecArray(Rec.getTextureName());
-			Arrays[Rec.getTextureName()]->add(Rec);
-		} else {
-			I->second->add(Rec);
-		}
+#define ADD_VOXEL_SIDE(Ax, Ay, Az, Bx, By, Bz, Cx, Cy, Cz, Dx, Dy, Dz, side) \
+  if (V.S[side].isFree()){                                         \
+    GLfloat u = V.getUVOffset(side).first;                         \
+    GLfloat v = V.getUVOffset(side).second;                        \
+    Array.add({   (float) Ax, (float) Ay, (float) Az,              \
+                  (float) Bx, (float) By, (float) Bz,              \
+                  (float) Cx, (float) Cy, (float) Cz,              \
+                  (float) Cx, (float) Cy, (float) Cz,              \
+                  (float) Dx, (float) Dy, (float) Dz,              \
+                  (float) Ax, (float) Ay, (float) Az}, {           \
+                  u, v,             															 \
+                  u + us,   v,                                     \
+                  u + us,   v + vs,                                \
+                  u + us,   v + vs,                                \
+                  u, v + vs,                                       \
+                  u, v                                             \
+                  });                                              \
+  }
+
+class VoxelMapRenderer {
+
+	VoxelMap &Map;
+	TexRecArray Array;
+
+public:
+	VoxelMapRenderer(VoxelMap &Map) : Map(Map), Array("textures.bmp") {
+		recreate();
 	}
 
-	void finalize() {
-		for (auto &Pair : Arrays) {
-			Pair.second->finalize();
+	void recreate() {
+		for (int64_t x = 0; x < Map.getSize().x; ++x) {
+			std::cout << x << "\n";
+			for (int64_t y = 0; y < Map.getSize().y; ++y) {
+				for (int64_t z = 0; z < Map.getSize().z; ++z) {
+					AnnotatedVoxel V = Map.getAnnotated({x, y, z});
+					if (V.V.isFree())
+						continue;
+
+
+					const float us = Voxel::TEX_SIZE;
+					const float vs = us;
+
+					ADD_VOXEL_SIDE(
+						x,     y + 1, z,
+						x,     y + 1, z + 1,
+						x + 1, y + 1, z + 1,
+						x + 1, y + 1, z,
+						0);
+					ADD_VOXEL_SIDE(
+						x,     y, z,
+						x,     y, z + 1,
+						x + 1, y, z + 1,
+						x + 1, y, z,
+						1);
+					ADD_VOXEL_SIDE(
+						x,     y + 1, z,
+						x + 1, y + 1, z,
+						x + 1, y, z,
+						x,     y, z,
+						2);
+					ADD_VOXEL_SIDE(
+						x,     y + 1, z + 1,
+						x + 1, y + 1, z + 1,
+						x + 1, y, z + 1,
+						x,     y, z + 1,
+						3);
+					ADD_VOXEL_SIDE(
+						x, y + 1, z + 1,
+						x, y + 1, z,
+						x,     y, z,
+						x,     y, z + 1,
+						4);
+					ADD_VOXEL_SIDE(
+						x + 1, y + 1, z + 1,
+						x + 1, y + 1, z,
+						x + 1,     y, z,
+						x + 1,     y, z + 1,
+						5);
+				}
+			}
 		}
+		Array.finalize();
 	}
 
 	void draw() {
-		for (auto &Pair : Arrays) {
-			Pair.second->draw();
-		}
-	}
-};
-
-class Tile {
-	int Height[4] = {0, 0, 0, 0};
-	int X = -1, Y = -1;
-	bool Forest = false;
-	bool City = false;
-public:
-	Tile() {
-	}
-	Tile(int X, int Y) : X(X), Y(Y) {
-	}
-
-	void makeForest() {
-		Forest = true;
-	}
-
-	void makeCity() {
-		City = true;
-	}
-
-	int getHeight(int i) const {
-		return Height[i];
-	}
-
-	void setHeight(int i, int value) {
-		Height[i] = value;
-	}
-
-	int getX() const {
-		return X;
-	}
-
-	int getY() const {
-		return Y;
-	}
-
-	bool isForest() const {
-		if (isCity())
-			return false;
-		if (hasWater())
-			return false;
-		return Forest;
-	}
-
-	bool isCity() const {
-		return City;
-	}
-
-	operator bool() const {
-		return X >= 0;
-	}
-
-	bool hasWater() const {
-		for (int i = 0; i < 4; ++i)
-			if (Height[i] < 0)
-				return true;
-		return false;
-	}
-
-	bool isFullWater() const {
-		for (int i = 0; i < 4; ++i)
-			if (Height[i] >= 0)
-				return false;
-		return true;
-	}
-
-	bool isCliff() const {
-		auto max = std::max_element(std::begin(Height), std::end(Height));
-		auto min = std::min_element(std::begin(Height), std::end(Height));
-		return (*max - *min) >= 4;
-	}
-
-};
-
-class TileMap {
-	std::vector<Tile> Tiles;
-	int Width;
-	int Height;
-
-	Tile DefaultTile;
-
-	double percentageWater() {
-		unsigned waterTiles = 0;
-		for (int x = 0; x < Width; ++x) {
-			for (int y = 0; y < Height; ++y) {
-			  if (get(x, y).hasWater())
-					++waterTiles;
-			}
-		}
-		std::cout << (waterTiles / (double) (Width * Height)) << std::endl;
-		return waterTiles / (double) (Width * Height);
-	}
-
-	void generate(int Seed) {
-		noise::module::Perlin myModule;
-		double offset = Seed;
-
-		for (int x = 0; x < Width; ++x) {
-			for (int y = 0; y < Height; ++y) {
-				get(x, y) = Tile(x, y);
-				double factor = 40.0;
-				int height = (int) (myModule.GetValue(offset + x / factor, offset + y / factor, offset + 0.5) * 10);
-
-				setHeight(x, y, height);
-			}
-		}
-		offset = Seed + Seed + 1500;
-
-		for (int x = 0; x < Width; ++x) {
-			for (int y = 0; y < Height; ++y) {
-				double factor = 20.0;
-				double value = myModule.GetValue(offset - x / factor, offset - y / factor, offset + 0.9);
-
-				if (value > 0.3)
-					get(x, y).makeForest();
-			}
-		}
-		offset = Seed + Seed + Seed + 3000;
-
-		for (int x = 0; x < Width; ++x) {
-			for (int y = 0; y < Height; ++y) {
-				double factor = 40.0;
-				double value = myModule.GetValue(offset - x / factor, offset - y / factor, offset + 0.9);
-
-				if (value > 0.7)
-					get(x, y).makeCity();
-			}
-		}
-	}
-
-public:
-	TileMap(int Width, int Height, int Seed = 25) : Width(Width), Height(Height) {
-		Tiles.resize(Width * Height);
-		do {
-			generate(Seed);
-			Seed += 5;
-		} while (percentageWater() > 0.60);
-	}
-
-	Tile& get(int X, int Y) {
-		if (X < 0 || Y < 0 || X >= Width)
-			return DefaultTile;
-		size_t Index = X + Y * Width;
-		if (Index >= Tiles.size())
-			return DefaultTile;
-		return Tiles[Index];
-	}
-
-	void setHeight(int X, int Y, int Height) {
-		for(int i = 0; i < 4; ++i)
-			get(X, Y).setHeight(i, Height);
-		get(X + 1, Y + 1).setHeight(3, Height);
-		get(X - 1, Y + 1).setHeight(2, Height);
-		get(X - 1, Y - 1).setHeight(1, Height);
-		get(X + 1, Y - 1).setHeight(0, Height);
-
-		get(X + 1, Y).setHeight(0, Height);
-		get(X + 1, Y).setHeight(3, Height);
-
-		get(X - 1, Y).setHeight(1, Height);
-		get(X - 1, Y).setHeight(2, Height);
-
-		get(X, Y - 1).setHeight(0, Height);
-		get(X, Y - 1).setHeight(1, Height);
-
-		get(X, Y + 1).setHeight(2, Height);
-		get(X, Y + 1).setHeight(3, Height);
-	}
-
-	int getWidth() {
-		return Width;
-	}
-
-	int getHeight() {
-		return Height;
-	}
-
-};
-
-constexpr float TILE_SIZE = 0.1f;
-constexpr float TILE_HEIGHT = 0.02f;
-
-
-double getRandomFrac() {
-	static std::random_device rd; // obtain a random number from hardware
-	static std::mt19937 eng(rd()); // seed the generator
-	static std::uniform_real_distribution<> distr(-1.0, 1.0); // define the range
-	return distr(eng);
-}
-
-class Tree {
-	std::vector<std::shared_ptr<TexRec> > Recs;
-
-	float centerX, centerY;
-
-	void makeHex(float HeightBottom, float HeightTop, float RadiusBottom, float RadiusTop) {
-		std::vector<std::pair<float, float> > BottomCoords;
-		std::vector<std::pair<float, float> > TopCoords;
-		float staticRot = getRandomFrac()* (2 * M_PI) / 6;
-		for (int i = 0; i <= 6; ++i) {
-			float dx = std::cos(staticRot + i * (2 * M_PI) / 6);
-			float dy = std::sin(staticRot + i * (2 * M_PI) / 6);
-			BottomCoords.push_back(std::make_pair(centerX + dx * RadiusBottom, centerY + dy * RadiusBottom));
-			TopCoords.push_back(std::make_pair(centerX + dx * RadiusTop, centerY + dy * RadiusTop));
-		}
-
-		for (int i = 1; i <= 6; ++i)
-		  Recs.push_back(std::shared_ptr<TexRec>(new TexRec("forest.bmp",
-				{BottomCoords[i - 1].first, HeightBottom, BottomCoords[i - 1].second},
-																												{BottomCoords[i].first, HeightBottom, BottomCoords[i].second},
-																												{TopCoords[i].first, HeightTop, TopCoords[i].second},
-																												{TopCoords[i - 1].first, HeightTop, TopCoords[i - 1].second}
-			)));
-	}
-
-public:
-	Tree() {
-	}
-	Tree(int x, int y, int height) {
-		centerX = TILE_SIZE * (x + 0.5f) + getRandomFrac() * TILE_SIZE / 4;
-		centerY = TILE_SIZE * (y + 0.5f) + getRandomFrac() * TILE_SIZE / 4;
-		float Scale = TILE_HEIGHT + getRandomFrac() * TILE_HEIGHT / 8;
-		makeHex(height * Scale, (height + 2) * Scale, TILE_SIZE * 0.45f, TILE_SIZE * 0.2f);
-		makeHex((height + 2) * Scale, (height + 4) * Scale, TILE_SIZE * 0.3f, TILE_SIZE * 0.1f);
-		makeHex((height + 4) * Scale, (height + 6) * Scale, TILE_SIZE * 0.15f, 0);
-	}
-
-	void draw() {
-		for (auto &Rec : Recs)
-			Rec->draw(1.0f);
-	}
-
-	void addRecsTo(TexRecArrayMap& ArrayMap) {
-		for (auto& Rec : Recs)
-			ArrayMap.add(*Rec);
-	}
-};
-
-class TileRenderer {
-
-	std::shared_ptr<TexRec> Rec;
-
-	bool IsWater = false;
-
-	int x = 0;
-	int y = 0;
-
-	std::shared_ptr<Tree> t;
-
-public:
-	TileRenderer() {
-	}
-	TileRenderer(Tile &T) {
-		float xOff = TILE_SIZE * T.getX();
-		float yOff = TILE_SIZE * T.getY();
-		std::string Texture = T.getY() != 13 ? "grass.bmp" : "street.bmp";
-		if (T.hasWater())
-			Texture = "sand.bmp";
-		else if (T.isForest())
-			Texture = "sand.bmp";
-		else if (T.isCliff())
-			Texture = "stones.bmp";
-		else if (T.isCity())
-			Texture = "city.bmp";
-
-		Rec.reset(new TexRec(Texture,
-												 {xOff       , TILE_HEIGHT * T.getHeight(0), TILE_SIZE + yOff},
-												 {TILE_SIZE + xOff, TILE_HEIGHT * T.getHeight(1), TILE_SIZE + yOff},
-												 {TILE_SIZE + xOff, TILE_HEIGHT * T.getHeight(2), yOff       },
-												 {xOff       , TILE_HEIGHT * T.getHeight(3), yOff       }));
-
-		if (T.isForest())
-			t.reset(new Tree(T.getX(), T.getY(), T.getHeight(0)));
-	}
-	// for water
-	TileRenderer(int x, int y) : x(x), y(y){
-		float xOff = TILE_SIZE * x;
-		float yOff = TILE_SIZE * y;
-		Rec.reset(new TexRec("water.bmp",
-												 {xOff       , TILE_HEIGHT * -0.5f, TILE_SIZE + yOff},
-												 {TILE_SIZE + xOff, TILE_HEIGHT * -0.5f, TILE_SIZE + yOff},
-												 {TILE_SIZE + xOff, TILE_HEIGHT * -0.5f, yOff       },
-												 {xOff       , TILE_HEIGHT * -0.5f, yOff       }));
-		IsWater = true;
-
-	}
-
-	void draw(double time) {
-		if (IsWater) {
-			float BaseZ = TILE_HEIGHT * -0.25f;
-			float WaveHeight = TILE_HEIGHT * 0.13f;
-			float WaveSpeed = 10;
-			Rec->setHeights(BaseZ + WaveHeight * std::cos(time + x * WaveSpeed),
-											BaseZ + WaveHeight * std::cos(time + (x + 1) * WaveSpeed),
-											BaseZ + WaveHeight * std::cos(time + (x + 1) * WaveSpeed),
-											BaseZ + WaveHeight * std::cos(time + x * WaveSpeed));
-			Rec->draw(1.0f);
-		}
-	}
-
-	void addRecsTo(TexRecArrayMap &ArrayMap) {
-		ArrayMap.add(*Rec);
-		if (t)
-			t->addRecsTo(ArrayMap);
+		Array.draw();
 	}
 
 };
 
 
-class FPSCounter {
-	unsigned frames = 0;
-	std::chrono::steady_clock::time_point lastStart;
-
-public:
-	FPSCounter() {
-		lastStart = std::chrono::steady_clock::now();
-	}
-	void addFrame() {
-		++frames;
-		auto diff = std::chrono::steady_clock::now() - lastStart;
-		auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(diff).count();
-		if (millis >= 1000) {
-			lastStart = std::chrono::steady_clock::now();
-			std::cout << (frames / (millis / 1000.0)) << std::endl;
-			frames = 0;
-		}
-	}
-};
 
 int main( void ) {
 	// Initialise GLFW
@@ -688,9 +371,6 @@ int main( void ) {
 		getchar();
 		return -1;
 	}
-
-	//TileMap Map(110, 110, (int) (getRandomFrac() * 200000));
-	TileMap Map(30, 30, 200000);
 
 	FPSCounter Counter;
 
@@ -732,14 +412,12 @@ int main( void ) {
 	glfwSetCursorPos(window, 1024 / 2, 768 / 2);
 
 	// Dark blue background
-	glClearColor(0.0f, 0.0f, 0.1f, 0.0f);
+	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
 
 	// Enable depth test
 	glEnable(GL_DEPTH_TEST);
 	// Accept fragment if it closer to the camera than the former one
 	glDepthFunc(GL_LESS);
-	glEnable( GL_BLEND );
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	// Cull triangles which normal is not towards the camera
 	// glEnable(GL_CULL_FACE);
@@ -754,28 +432,12 @@ int main( void ) {
 	// Get a handle for our "myTextureSampler" uniform
 	GLuint TextureID = glGetUniformLocation(programID, "myTextureSampler");
 
+
+	VoxelMap map({110, 110, 110});
+	std::cout << "Created" << std::endl;
+	VoxelMapRenderer mapRenderer(map);
+
 	{
-
-		TexRecArrayMap StaticRecs;
-
-		std::vector<TileRenderer> waterTiles;
-		unsigned size = Map.getWidth() * Map.getHeight();
-		unsigned i = 0;
-		for (unsigned x = 0; x < Map.getWidth(); x++) {
-			for (unsigned y = 0; y < Map.getHeight(); y++) {
-				++i;
-				if (i % 1024 == 0) {
-					std::cout << "Created: " << (100.0 * i) / size << "%" << std::endl;
-				}
-				if (!Map.get(x, y).isFullWater()) {
-					TileRenderer renderer(Map.get(x, y));
-					renderer.addRecsTo(StaticRecs);
-				}
-				if (Map.get(x, y).hasWater())
-					waterTiles.emplace_back(x, y);
-			}
-		}
-		StaticRecs.finalize();
 
 		do {
 
@@ -801,14 +463,7 @@ int main( void ) {
 
 			chr::time_point<chr::steady_clock> tp = chr::steady_clock::now();
 
-			double time = chr::duration_cast<chr::milliseconds>(tp.time_since_epoch()).count() / 1000.0;
-
-			//for (TileRenderer &t : tiles)
-			//	t.draw(time);
-			StaticRecs.draw();
-
-			for (TileRenderer &t : waterTiles)
-				t.draw(time);
+			mapRenderer.draw();
 
 			// Swap buffers
 			glfwSwapBuffers(window);

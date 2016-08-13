@@ -13,6 +13,6 @@ uniform float alpha;
 void main(){
 
 	// Output color = color of the texture at the specified UV
-	color = texture(myTextureSampler, UV).rgba;
+	color = texture(myTextureSampler, vec2(UV.x, -UV.y)).rgba;
 	color.a = alpha;
 }

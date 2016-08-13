@@ -46,6 +46,8 @@ add_executable(tutorial06_keyboard_and_mouse
 	
 	tutorial06_keyboard_and_mouse/TransformVertexShader.vertexshader
 	tutorial06_keyboard_and_mouse/TextureFragmentShader.fragmentshader
+	tutorial06_keyboard_and_mouse/Map.cpp
+	tutorial06_keyboard_and_mouse/Map.h
 )
 target_link_libraries(tutorial06_keyboard_and_mouse
 	${ALL_LIBS}
