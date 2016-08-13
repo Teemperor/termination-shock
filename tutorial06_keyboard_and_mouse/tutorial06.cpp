@@ -690,7 +690,7 @@ int main( void ) {
 	}
 
 	//TileMap Map(110, 110, (int) (getRandomFrac() * 200000));
-	TileMap Map(210, 210, 200000);
+	TileMap Map(30, 30, 200000);
 
 	FPSCounter Counter;
 
