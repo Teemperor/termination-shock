@@ -60,7 +60,7 @@ public:
 	}
 	void activate();
 
-	std::string getPath();
+	const std::string &getPath();
 };
 
 
@@ -94,7 +94,7 @@ public:
 		return Textures[ID];
 	}
 
-	std::string getName(unsigned ID) {
+	const std::string &getName(unsigned ID) {
 		return IDsToTextureNames[ID];
 	}
 
@@ -112,7 +112,7 @@ void TextureID::activate() {
 	TextureManager[ID].activate();
 }
 
-std::string TextureID::getPath() {
+const std::string& TextureID::getPath() {
 	return TextureManager.getName(ID);
 }
 
@@ -138,8 +138,8 @@ class TexRec {
 
 public:
 	TexRec(const std::string &TexturePath, v3 d, v3 c, v3 b, v3 a) : Texture(TextureManager.loadTexture(TexturePath)) {
-		glGenVertexArrays(1, &VertexArrayID);
-		glBindVertexArray(VertexArrayID);
+		//glGenVertexArrays(1, &VertexArrayID);
+		//glBindVertexArray(VertexArrayID);
 
 		// Our vertices. Tree consecutive floats give a 3D vertex; Three consecutive vertices give a triangle.
 		// A cube has 6 faces with 2 triangles each, so this makes 6*2=12 triangles, and 12*3 vertices
@@ -162,26 +162,26 @@ public:
 			0, 0,
 		};
 
-		glGenBuffers(1, &vertexbuffer);
+		/*glGenBuffers(1, &vertexbuffer);
 		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
 		glBufferData(GL_ARRAY_BUFFER, vertexes.size() * sizeof(GLfloat), vertexes.data(), GL_STATIC_DRAW);
 
 		glGenBuffers(1, &uvbuffer);
 		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-		glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(GLfloat), uvs.data(), GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(GLfloat), uvs.data(), GL_STATIC_DRAW); */
 	}
 
 	TexRec(const TexRec &Other) = delete;
 
 	~TexRec() {
-		glDeleteBuffers(1, &vertexbuffer);
+		/*glDeleteBuffers(1, &vertexbuffer);
 		glDeleteBuffers(1, &uvbuffer);
-		glDeleteVertexArrays(1, &VertexArrayID);
+		glDeleteVertexArrays(1, &VertexArrayID); */
 	}
 
 	void update() {
-		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, vertexes.size() * sizeof(GLfloat), vertexes.data());
+		//glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+		//glBufferSubData(GL_ARRAY_BUFFER, 0, vertexes.size() * sizeof(GLfloat), vertexes.data());
 	}
 
 	void setHeights(float ah, float bh, float ch, float dh) {
@@ -194,7 +194,7 @@ public:
 		update();
 	}
 
-	std::string getTextureName() {
+	const std::string& getTextureName() {
 		return Texture.getPath();
 	}
 
@@ -206,7 +206,7 @@ public:
 	}
 
 	void draw(float alpha) {
-		Texture.activate();
+		/*Texture.activate();
 
 		glUniform1f(1, alpha);
 
@@ -238,7 +238,7 @@ public:
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 
 		glDisableVertexAttribArray(0);
-		glDisableVertexAttribArray(1);
+		glDisableVertexAttribArray(1); */
 	}
 };
 
@@ -690,7 +690,7 @@ int main( void ) {
 	}
 
 	//TileMap Map(110, 110, (int) (getRandomFrac() * 200000));
-	TileMap Map(110, 110, 200000);
+	TileMap Map(210, 210, 200000);
 
 	FPSCounter Counter;
 
@@ -759,8 +759,14 @@ int main( void ) {
 		TexRecArrayMap StaticRecs;
 
 		std::vector<TileRenderer> waterTiles;
+		unsigned size = Map.getWidth() * Map.getHeight();
+		unsigned i = 0;
 		for (unsigned x = 0; x < Map.getWidth(); x++) {
 			for (unsigned y = 0; y < Map.getHeight(); y++) {
+				++i;
+				if (i % 1024 == 0) {
+					std::cout << "Created: " << (100.0 * i) / size << "%" << std::endl;
+				}
 				if (!Map.get(x, y).isFullWater()) {
 					TileRenderer renderer(Map.get(x, y));
 					renderer.addRecsTo(StaticRecs);
@@ -801,8 +807,8 @@ int main( void ) {
 			//	t.draw(time);
 			StaticRecs.draw();
 
-			//for (TileRenderer &t : waterTiles)
-			//	t.draw(time);
+			for (TileRenderer &t : waterTiles)
+				t.draw(time);
 
 			// Swap buffers
 			glfwSwapBuffers(window);
