@@ -187,10 +187,12 @@ class TexRecArray {
   GLuint vertexbuffer;
   GLuint uvbuffer;
   GLuint lightbuffer;
+  GLuint occlusionbuffer;
 
   std::vector<GLfloat> vertexes;
   std::vector<GLfloat> uvs;
   std::vector<GLfloat> lights;
+  std::vector<GLfloat> occlusion;
 
   GLuint VertexArrayID;
 
@@ -209,11 +211,12 @@ public:
     glDeleteBuffers(1, &vertexbuffer);
     glDeleteBuffers(1, &uvbuffer);
     glDeleteBuffers(1, &lightbuffer);
+    glDeleteBuffers(1, &occlusionbuffer);
     glDeleteVertexArrays(1, &VertexArrayID);
   }
 
   void add(const std::vector<GLfloat> &v, const std::vector<GLfloat> &u,
-           float light) {
+           float light, const std::array<GLfloat, 6> &o) {
     vertexes.resize(vertexes.size() + 18);
     std::memcpy(vertexes.data() + vertexes.size() - 18, v.data(),
                 sizeof(GLfloat) * 18);
@@ -225,6 +228,9 @@ public:
     lights.push_back(light);
     lights.push_back(light);
     lights.push_back(light);
+
+    occlusion.resize(occlusion.size() + o.size());
+    std::memcpy(occlusion.data() + occlusion.size() - o.size(), o.data(), sizeof(GLfloat) * o.size());
 
     //vertexes.insert(vertexes.begin(), v.begin(), v.end());
     //uvs.insert(uvs.begin(), u.begin(), u.end());
@@ -256,6 +262,11 @@ public:
     glBindBuffer(GL_ARRAY_BUFFER, lightbuffer);
     glBufferData(GL_ARRAY_BUFFER, lights.size() * sizeof(GLfloat),
                  lights.data(), GL_STATIC_DRAW);
+
+    glGenBuffers(1, &occlusionbuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, occlusionbuffer);
+    glBufferData(GL_ARRAY_BUFFER, occlusion.size() * sizeof(GLfloat),
+                 occlusion.data(), GL_STATIC_DRAW);
   }
 
   void draw() {
@@ -272,7 +283,7 @@ public:
       GL_FLOAT,           // type
       GL_FALSE,           // normalized?
       0,                  // stride
-      (void *) 0            // array buffer offset
+      (void *) 0          // array buffer offset
     );
 
     // 2nd attribute buffer : UVs
@@ -284,7 +295,7 @@ public:
       GL_FLOAT,                         // type
       GL_FALSE,                         // normalized?
       0,                                // stride
-      (void *) 0                          // array buffer offset
+      (void *) 0                        // array buffer offset
     );
 
     // 3nd attribute buffer : Lights
@@ -292,11 +303,23 @@ public:
     glBindBuffer(GL_ARRAY_BUFFER, lightbuffer);
     glVertexAttribPointer(
       2,                                // attribute. No particular reason for 1, but must match the layout in the shader.
-      1,                                // size : U+V => 2
+      1,                                // size : one float
       GL_FLOAT,                         // type
       GL_FALSE,                         // normalized?
       0,                                // stride
-      (void *) 0                          // array buffer offset
+      (void *) 0                        // array buffer offset
+    );
+
+    // 4nd attribute buffer : Occlussion lightning
+    glEnableVertexAttribArray(3);
+    glBindBuffer(GL_ARRAY_BUFFER, occlusionbuffer);
+    glVertexAttribPointer(
+      3,                                // attribute. No particular reason for 1, but must match the layout in the shader.
+      1,                                // size : one float
+      GL_FLOAT,                         // type
+      GL_FALSE,                         // normalized?
+      0,                                // stride
+      (void *) 0                        // array buffer offset
     );
 
 
@@ -320,19 +343,124 @@ public:
                   (float) Cx, (float) Cy, (float) Cz,              \
                   (float) Dx, (float) Dy, (float) Dz,              \
                   (float) Ax, (float) Ay, (float) Az}, {           \
-                  u, v,                                           \
+                  u, v,                                            \
                   u + us,   v,                                     \
                   u + us,   v + vs,                                \
                   u + us,   v + vs,                                \
                   u, v + vs,                                       \
                   u, v                                             \
-                  }, V.S[side].lightPercent());                    \
+                  }, V.S[side].lightPercent(),                     \
+                  getOcclusionLighting({x, y, z}, side));          \
   }
 
 class VoxelMapRenderer {
 
   VoxelChunk &Map;
   TexRecArray Array;
+
+  static constexpr float ONE_THIRD = 1.0f / 3.0f;
+
+#define LIGHT_SUM(ax, ay, az, bx, by, bz, cx, cy, cz) \
+   (Map.get({pos.x + ax, pos.y + ay, pos.z + az}).isFree() ? ONE_THIRD : 0.1f) \
+ + (Map.get({pos.x + bx, pos.y + by, pos.z + bz}).isFree() ? ONE_THIRD : 0.1f) \
+ + (Map.get({pos.x + cx, pos.y + cy, pos.z + cz}).isFree() ? ONE_THIRD : 0.1f);
+
+  std::array<GLfloat, 6> getOcclusionLighting(const v3& pos, unsigned side) {
+    std::array<GLfloat, 6> Result = {1, 1, 1, 1, 1, 1};
+    switch(side) {
+      case 0: {
+        Result[2] = Result[3] =  LIGHT_SUM( 1,  1,  0,
+                                            1,  1,  1,
+                                            0,  1,  1);
+        Result[0] = Result[5] =  LIGHT_SUM(-1,  1,  0,
+                                           -1,  1, -1,
+                                            0,  1, -1);
+        Result[1] =              LIGHT_SUM(-1,  1,  0,
+                                           -1,  1,  1,
+                                            0,  1,  1);
+        Result[4] =              LIGHT_SUM( 1,  1,  0,
+                                            1,  1, -1,
+                                            0,  1, -1);
+        break;
+      }
+      case 1: {
+        Result[2] = Result[3] =  LIGHT_SUM( 1, -1,  0,
+                                            1, -1,  1,
+                                            0, -1,  1);
+        Result[0] = Result[5] =  LIGHT_SUM(-1, -1,  0,
+                                           -1, -1, -1,
+                                            0, -1, -1);
+        Result[1] =              LIGHT_SUM(-1, -1,  0,
+                                           -1, -1,  1,
+                                            0, -1,  1);
+        Result[4] =              LIGHT_SUM( 1, -1,  0,
+                                            1, -1, -1,
+                                            0, -1, -1);
+        break;
+      }
+      case 2: {
+        Result[2] = Result[3] =  LIGHT_SUM( 1,  0, -1,
+                                            0, -1, -1,
+                                            1, -1, -1);
+        Result[0] = Result[5] =  LIGHT_SUM(-1,  0, -1,
+                                            0,  1, -1,
+                                           -1,  1, -1);
+        Result[1] =              LIGHT_SUM( 1,  0, -1,
+                                            0,  1, -1,
+                                            1,  1, -1);
+        Result[4] =              LIGHT_SUM(-1,  0, -1,
+                                            0, -1, -1,
+                                           -1, -1, -1);
+        break;
+      }
+      case 3: {
+        Result[2] = Result[3] =  LIGHT_SUM( 1,  0,  1,
+                                            0, -1,  1,
+                                            1, -1,  1);
+        Result[0] = Result[5] =  LIGHT_SUM(-1,  0,  1,
+                                            0,  1,  1,
+                                           -1,  1,  1);
+        Result[1] =              LIGHT_SUM( 1,  0,  1,
+                                            0,  1,  1,
+                                            1,  1,  1);
+        Result[4] =              LIGHT_SUM(-1,  0,  1,
+                                            0, -1,  1,
+                                           -1, -1,  1);
+        break;
+      }
+      case 4: {
+        Result[2] = Result[3] =  LIGHT_SUM(-1, -1, -1,
+                                           -1,  0, -1,
+                                           -1, -1,  0);
+        Result[0] = Result[5] =  LIGHT_SUM(-1,  1,  1,
+                                           -1,  0,  1,
+                                           -1,  1,  0);
+        Result[1] =              LIGHT_SUM(-1,  1, -1,
+                                           -1,  0, -1,
+                                           -1,  1,  0);
+        Result[4] =              LIGHT_SUM(-1, -1,  1,
+                                           -1,  0,  1,
+                                           -1, -1,  0);
+        break;
+      }
+      case 5: {
+        Result[2] = Result[3] =  LIGHT_SUM( 1, -1, -1,
+                                            1,  0, -1,
+                                            1, -1,  0);
+        Result[0] = Result[5] =  LIGHT_SUM( 1,  1,  1,
+                                            1,  0,  1,
+                                            1,  1,  0);
+        Result[1] =              LIGHT_SUM( 1,  1, -1,
+                                            1,  0, -1,
+                                            1,  1,  0);
+        Result[4] =              LIGHT_SUM( 1, -1,  1,
+                                            1,  0,  1,
+                                            1, -1,  0);
+        break;
+      }
+    }
+    return Result;
+  }
 
 public:
   VoxelMapRenderer(VoxelChunk &Map) : Map(Map), Array("textures.bmp") {

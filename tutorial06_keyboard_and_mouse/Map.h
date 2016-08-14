@@ -80,7 +80,7 @@ public:
       case STONE:
         return std::make_pair(1 * TEX_SIZE, 0);
       case BEDROCK:
-        return std::make_pair(6 * TEX_SIZE, 3 * TEX_SIZE);
+        return std::make_pair(1 * TEX_SIZE, 1 * TEX_SIZE);
       case EARTH:
         return std::make_pair(2 * TEX_SIZE, 0);
       default: assert(false);
