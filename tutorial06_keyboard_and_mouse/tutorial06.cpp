@@ -39,10 +39,13 @@ public:
 	FPSCounter() {
 		lastStart = std::chrono::steady_clock::now();
 	}
+	long getMillis() {
+		auto diff = std::chrono::steady_clock::now() - lastStart;
+		return std::chrono::duration_cast<std::chrono::milliseconds>(diff).count();
+	}
 	void addFrame() {
 		++frames;
-		auto diff = std::chrono::steady_clock::now() - lastStart;
-		auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(diff).count();
+		auto millis = getMillis();
 		if (millis >= 1000) {
 			lastStart = std::chrono::steady_clock::now();
 			std::cout << (frames / (millis / 1000.0)) << std::endl;
@@ -181,9 +184,11 @@ class TexRecArray {
 
 	GLuint vertexbuffer;
 	GLuint uvbuffer;
+	GLuint lightbuffer;
 
 	std::vector<GLfloat> vertexes;
 	std::vector<GLfloat> uvs;
+	std::vector<GLfloat> lights;
 
 	GLuint VertexArrayID;
 
@@ -200,14 +205,21 @@ public:
 			return;
 		glDeleteBuffers(1, &vertexbuffer);
 		glDeleteBuffers(1, &uvbuffer);
+		glDeleteBuffers(1, &lightbuffer);
 		glDeleteVertexArrays(1, &VertexArrayID);
 	}
 
-	void add(const std::vector<GLfloat> &v, const std::vector<GLfloat> &u) {
+	void add(const std::vector<GLfloat> &v, const std::vector<GLfloat> &u, float light) {
 		vertexes.resize(vertexes.size() + 18);
 		std::memcpy(vertexes.data() + vertexes.size() - 18, v.data(), sizeof(GLfloat) * 18);
 		uvs.resize(uvs.size() + 12);
 		std::memcpy(uvs.data() + uvs.size() - 12, u.data(), sizeof(GLfloat) * 12);
+		lights.push_back(light);
+		lights.push_back(light);
+		lights.push_back(light);
+		lights.push_back(light);
+		lights.push_back(light);
+		lights.push_back(light);
 
 		//vertexes.insert(vertexes.begin(), v.begin(), v.end());
 		//uvs.insert(uvs.begin(), u.begin(), u.end());
@@ -232,6 +244,10 @@ public:
 		glGenBuffers(1, &uvbuffer);
 		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
 		glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(GLfloat), uvs.data(), GL_STATIC_DRAW);
+
+		glGenBuffers(1, &lightbuffer);
+		glBindBuffer(GL_ARRAY_BUFFER, lightbuffer);
+		glBufferData(GL_ARRAY_BUFFER, lights.size() * sizeof(GLfloat), lights.data(), GL_STATIC_DRAW);
 	}
 
 	void draw() {
@@ -263,11 +279,25 @@ public:
 			(void*)0                          // array buffer offset
 		);
 
+		// 3nd attribute buffer : Lights
+		glEnableVertexAttribArray(2);
+		glBindBuffer(GL_ARRAY_BUFFER, lightbuffer);
+		glVertexAttribPointer(
+			2,                                // attribute. No particular reason for 1, but must match the layout in the shader.
+			1,                                // size : U+V => 2
+			GL_FLOAT,                         // type
+			GL_FALSE,                         // normalized?
+			0,                                // stride
+			(void*)0                          // array buffer offset
+		);
+
+
 		// Draw the triangle !
 		glDrawArrays(GL_TRIANGLES, 0, vertexes.size() / 3);
 
 		glDisableVertexAttribArray(0);
 		glDisableVertexAttribArray(1);
+		glDisableVertexAttribArray(2);
 	}
 };
 
@@ -288,29 +318,26 @@ public:
                   u + us,   v + vs,                                \
                   u, v + vs,                                       \
                   u, v                                             \
-                  });                                              \
+                  }, V.S[side].lightPercent());                    \
   }
 
 class VoxelMapRenderer {
 
-	VoxelMap &Map;
+	VoxelChunk &Map;
 	TexRecArray Array;
 
 public:
-	VoxelMapRenderer(VoxelMap &Map) : Map(Map), Array("textures.bmp") {
+	VoxelMapRenderer(VoxelChunk &Map) : Map(Map), Array("textures.bmp") {
 		recreate();
 	}
 
 	void recreate() {
 		for (int64_t x = 0; x < Map.getSize().x; ++x) {
-			std::cout << x << "\n";
 			for (int64_t y = 0; y < Map.getSize().y; ++y) {
 				for (int64_t z = 0; z < Map.getSize().z; ++z) {
 					AnnotatedVoxel V = Map.getAnnotated({x, y, z});
 					if (V.V.isFree())
 						continue;
-
-
 					const float us = Voxel::TEX_SIZE;
 					const float vs = us;
 
@@ -432,10 +459,13 @@ int main( void ) {
 	// Get a handle for our "myTextureSampler" uniform
 	GLuint TextureID = glGetUniformLocation(programID, "myTextureSampler");
 
+	glfwSwapInterval(0);
 
-	VoxelMap map({110, 110, 110});
-	std::cout << "Created" << std::endl;
+	VoxelChunk map({200, 200, 200});
+	std::cout << "Created\n";
+	FPSCounter timer;
 	VoxelMapRenderer mapRenderer(map);
+	std::cout << "Made chunk in " << timer.getMillis() << " millis\n";
 
 	{
 
@@ -458,10 +488,6 @@ int main( void ) {
 			// in the "MVP" uniform
 			glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
-
-			namespace chr = std::chrono;
-
-			chr::time_point<chr::steady_clock> tp = chr::steady_clock::now();
 
 			mapRenderer.draw();
 

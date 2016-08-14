@@ -107,7 +107,7 @@ struct AnnotatedVoxel {
   }
 };
 
-class VoxelMap {
+class VoxelChunk {
 
   v3 size;
   std::vector<Voxel> Voxels;
@@ -198,7 +198,7 @@ class VoxelMap {
   Voxel Default;
 
 public:
-  VoxelMap(v3 size) : size(size) {
+  VoxelChunk(v3 size) : size(size) {
     Voxels.resize(size.x * size.y * size.z);
     generate();
   }
@@ -234,6 +234,11 @@ public:
   const v3& getSize() {
     return size;
   }
+
+};
+
+class VoxelMap {
+public:
 
 };
 
