@@ -24,6 +24,7 @@ set(ALL_LIBS
 	glfw
 	GLEW_1130
 	noise
+	SDL2
 )
 
 add_definitions(
@@ -39,8 +40,6 @@ add_executable(tutorial06_keyboard_and_mouse
 	tutorial06_keyboard_and_mouse/tutorial06.cpp
 	common/shader.cpp
 	common/shader.hpp
-	common/controls.cpp
-	common/controls.hpp
 	common/texture.cpp
 	common/texture.hpp
 	
@@ -48,7 +47,7 @@ add_executable(tutorial06_keyboard_and_mouse
 	tutorial06_keyboard_and_mouse/TextureFragmentShader.fragmentshader
 	tutorial06_keyboard_and_mouse/Map.cpp
 	tutorial06_keyboard_and_mouse/Map.h
-)
+		tutorial06_keyboard_and_mouse/RenderWindow.cpp tutorial06_keyboard_and_mouse/RenderWindow.h tutorial06_keyboard_and_mouse/Camera.cpp tutorial06_keyboard_and_mouse/Camera.h tutorial06_keyboard_and_mouse/Controls.cpp tutorial06_keyboard_and_mouse/Controls.h)
 target_link_libraries(tutorial06_keyboard_and_mouse
 	${ALL_LIBS}
 )
