@@ -9,10 +9,46 @@
 #include <algorithm>
 #include <vector>
 #include <noise/module/perlin.h>
+#include <random>
+#include <iostream>
+#include <stack>
+#include <tuple>
+#include <set>
+#include <GL/glew.h>
 
 struct v3 {
   int64_t x, y, z;
+
+  v3() {
+  }
+  v3(int64_t x, int64_t y, int64_t z) : x(x), y(y), z(z) {}
+
+  bool operator!=(const v3 &Other) const {
+    return std::tie(x, y, z) != std::tie(Other.x, Other.y, Other.z);
+  }
+  bool operator==(const v3 &Other) const {
+    return std::tie(x, y, z) == std::tie(Other.x, Other.y, Other.z);
+  }
+
+  bool operator<(const v3 &Other) const {
+    return std::tie(x, y, z) < std::tie(Other.x, Other.y, Other.z);
+  }
+
+  v3& operator-=(const v3&Other) {
+    x -= Other.x;
+    y -= Other.y;
+    z -= Other.z;
+    return *this;
+  }
 };
+
+struct v3f {
+  float x, y, z;
+
+  v3f(float x, float y, float z) : x(x), y(y), z(z) {
+  }
+};
+
 
 class Voxel {
   uint8_t Type = 0;
@@ -27,7 +63,16 @@ public:
     GRASS,
     STONE,
     EARTH,
-    BEDROCK
+    BEDROCK,
+    TREE,
+    LEAF,
+
+    SPACE,
+    STEEL_WALL,
+    STEEL_FLOOR,
+    METAL_WALL,
+    METAL_CEILING,
+    LAMP,
   };
   Voxel() {
     assert(isDark());
@@ -41,6 +86,10 @@ public:
     if (L < LightMin)
       return;
     Light = L;
+  }
+
+  void increaseLight(uint8_t addLight) {
+    Light = (uint8_t) std::min(255u, (unsigned) Light + (unsigned)addLight);
   }
 
   bool isDark() const {
@@ -60,7 +109,7 @@ public:
   }
 
   bool isFree() const {
-    return Type == AIR;
+    return Type == AIR || Type == SPACE;
   }
 
   std::pair<float, float> getUVOffset(unsigned side, bool airAbove) const {
@@ -79,10 +128,33 @@ public:
         }
       case STONE:
         return std::make_pair(1 * TEX_SIZE, 0);
+      case TREE:
+        switch (side) {
+          case 0:
+          case 1:
+            return std::make_pair(5 * TEX_SIZE, 1 * TEX_SIZE);
+          default:
+            return std::make_pair(4 * TEX_SIZE, 1 * TEX_SIZE);
+        }
+      case LEAF:
+        return std::make_pair(5 * TEX_SIZE, 3 * TEX_SIZE);
       case BEDROCK:
         return std::make_pair(1 * TEX_SIZE, 1 * TEX_SIZE);
       case EARTH:
         return std::make_pair(2 * TEX_SIZE, 0);
+
+
+      case STEEL_WALL:
+        return std::make_pair(0 * TEX_SIZE, 0);
+      case  STEEL_FLOOR:
+        return std::make_pair(1 * TEX_SIZE, 0);
+      case  METAL_WALL:
+        return std::make_pair(2 * TEX_SIZE, 0);
+      case  METAL_CEILING:
+        return std::make_pair(3 * TEX_SIZE, 0);
+      case LAMP:
+        return std::make_pair(4 * TEX_SIZE, 0);
+
       default: assert(false);
         return std::make_pair(0, 0);
     }
@@ -107,20 +179,56 @@ struct AnnotatedVoxel {
   }
 };
 
+
 class VoxelChunk {
 
+  v3 offset;
   v3 size;
   std::vector<Voxel> Voxels;
+
+  std::default_random_engine engine;
+  std::uniform_real_distribution<float> distPercent;
+
+  float randomPercent() {
+    return distPercent(engine);
+  }
+
+  void plantTree(v3 pos, int h) {
+    for (int hi = 0; hi < h; ++hi) {
+      get({pos.x, pos.y + hi, pos.z}) = Voxel::TREE;
+    }
+    get({pos.x, pos.y + h, pos.z}) = Voxel::LEAF;
+    for (int x = -1; x <= 1; ++x) {
+      for (int z = -1; z <= 1; ++z) {
+        if (x == 0 && z == 0)
+          continue;
+        get({pos.x + x, pos.y + h - 1, pos.z + z}) = Voxel::LEAF;
+      }
+    }
+  }
+
+  void plantTrees() {
+    for (int64_t x = offset.x; x < size.x + offset.x; ++x) {
+      for (int64_t y = offset.y; y < size.y + offset.y; ++y) {
+        for (int64_t z = offset.z; z < size.z + offset.z; ++z) {
+          auto V = getAnnotated({x, y, z});
+          if (V.V.is(Voxel::GRASS) && V.S[0].isFree()) {
+            if (randomPercent() > 0.97f)
+              plantTree({x, y + 1, z}, (int) (2 + randomPercent() * 5));
+          }
+        }
+      }
+    }
+  }
 
   void generate() {
     noise::module::Perlin myModule;
 
-    for (int64_t x = 0; x < size.x; ++x) {
+    for (int64_t x = offset.x; x < size.x + offset.x; ++x) {
       const double factor = 100.0;
-      for (int64_t z = 0; z < size.z; ++z) {
+        for (int64_t z = offset.z; z < size.z + offset.z; ++z) {
         double d = myModule.GetValue(x / factor, z / factor, 0);
         double d2 = myModule.GetValue(x / factor, z / factor, 1000);
-
         int64_t h = (int64_t) (size.y / 2 + d * size.y / 5);
         for (int64_t y = 1; y < h; ++y) {
           get({x, y, z}) = Voxel::GRASS;
@@ -135,10 +243,10 @@ class VoxelChunk {
       }
     }
 
-    for (int64_t x = 0; x < size.x; ++x) {
+    for (int64_t x = offset.x; x < size.x + offset.x; ++x) {
       const double factor = 20.0;
-      for (int64_t y = 1; y < size.y; ++y) {
-        for (int64_t z = 0; z < size.z; ++z) {
+      for (int64_t y = offset.y; y < size.y + offset.y; ++y) {
+        for (int64_t z = offset.z; z < size.z + offset.z; ++z) {
           double d = myModule.GetValue(x / factor, y / factor, z / factor);
           if (d > 0.6) {
             get({x, y, z}) = Voxel(Voxel::AIR);
@@ -146,10 +254,12 @@ class VoxelChunk {
         }
       }
     }
+    plantTrees();
+
     createLight();
-    for (int64_t x = 0; x < size.x; ++x) {
-      for (int64_t y = 1; y < size.y; ++y) {
-        for (int64_t z = 0; z < size.z; ++z) {
+    for (int64_t x = offset.x; x < size.x + offset.x; ++x) {
+      for (int64_t y = offset.y; y < size.y + offset.y; ++y) {
+        for (int64_t z = offset.z; z < size.z + offset.z; ++z) {
           auto A = getAnnotated({x, y, z});
           if (A.V.is(Voxel::GRASS) && A.S[0].lightPercent() < 0.5f) {
             get({x, y, z}) = Voxel(Voxel::EARTH);
@@ -160,15 +270,15 @@ class VoxelChunk {
   }
 
   void createLight() {
-    for (int64_t x = 0; x < size.x; ++x) {
-      for (int64_t z = 0; z < size.z; ++z) {
-        for (int64_t y = size.y - 1;; --y) {
+    for (int64_t x = offset.x; x < size.x + offset.x; ++x) {
+      for (int64_t z = offset.z; z < size.z + offset.z; ++z) {
+        for (int64_t y = offset.y + size.y - 1;; --y) {
           auto& V = get({x, y, z});
           if (V.isFree())
             V.setLight(255);
           else
             break;
-          if (y == 0)
+          if (y == offset.y)
             break;
         }
       }
@@ -178,14 +288,15 @@ class VoxelChunk {
 
   bool spreadLight() {
     bool hasChanged = false;
-    for (int64_t x = 0; x < size.x; ++x) {
-      for (int64_t y = 0; y < size.y; ++y) {
-        for (int64_t z = 0; z < size.z; ++z) {
+    for (int64_t x = offset.x; x < size.x + offset.x; ++x) {
+      for (int64_t y = offset.y; y < size.y + offset.y; ++y) {
+        for (int64_t z = offset.z; z < size.z + offset.z; ++z) {
           auto V = getAnnotated({x, y, z});
-          if (V.V.isFree() && V.V.isDark()) {
-            uint8_t newLight = (uint8_t) (V.surroundLight() * 0.90f);
+          if (V.V.isFree()) {
+            unsigned newLight = (unsigned) (V.surroundLight() * 0.90f) + V.V.light();
+            newLight = std::min(255u, newLight);
             if (newLight > 0) {
-              get({x, y, z}).setLight(newLight);
+              get({x, y, z}).setLight((uint8_t) newLight);
               hasChanged = true;
             }
           }
@@ -195,15 +306,90 @@ class VoxelChunk {
     return hasChanged;
   }
 
+  void spreadLight(v3 startPos, uint8_t light = 255) {
+    std::vector<v3> ToHandle = {startPos};
+    std::vector<v3> ToHandleNext = {};
+    std::set<v3> Handled;
+
+    while (true) {
+      if (ToHandle.empty()) {
+        if (ToHandleNext.empty())
+          break;
+        if (light < 10)
+          break;
+        light *= 0.60;
+        if (light <= Voxel::LightMin) {
+          break;
+        }
+        std::swap(ToHandle, ToHandleNext);
+        //ToHandle = ToHandleNext;
+        //ToHandleNext.clear();
+      }
+      v3 pos = ToHandle.back();
+      ToHandle.pop_back();
+
+      get(pos).increaseLight(light);
+
+      for (int64_t x = pos.x - 1; x <= pos.x + 1; ++x) {
+        for (int64_t y = pos.y - 1; y <= pos.y + 1; ++y) {
+          for (int64_t z = pos.z - 1; z <= pos.z + 1; ++z) {
+            v3 iterPos(x, y, z);
+            if (x != pos.x && y != pos.y && z != pos.z)
+              continue;
+            if (pos == iterPos)
+              continue;
+            //std::cout << x << "," << y << "," << z << std::endl;
+
+            if (!get(iterPos).isFree())
+              continue;
+            if (Handled.find(iterPos) == Handled.end()) {
+              ToHandleNext.push_back(iterPos);
+              Handled.insert(iterPos);
+              continue;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  void generateSpaceShip() {
+    std::vector<v3> lights;
+    for (int64_t x = 15; x < 90; ++x) {
+      for (int64_t z = 15; z < 90; ++z) {
+        get({x, 11, z}) = Voxel::STEEL_FLOOR;
+        get({x, 15, z}) = Voxel::METAL_CEILING;
+
+        if (x % 9 == 0 || z % 9 == 0) {
+          if (x % 9 != 4 && x % 9 != 5) {
+            get({x, 14, z}) = Voxel::METAL_WALL;
+            get({x, 13, z}) = Voxel::METAL_WALL;
+            get({x, 12, z}) = Voxel::METAL_WALL;
+          }
+        }
+
+        if (x % 9 == 4 && z % 9 == 4) {
+          get({x, 15, z}) = Voxel::LAMP;
+          lights.push_back({x, 14, z});
+          lights.push_back({x, 16, z});
+        }
+      }
+    }
+    for (auto& pos : lights)
+      spreadLight(pos);
+  }
+
   Voxel Default;
 
 public:
-  VoxelChunk(v3 size) : size(size) {
+  VoxelChunk(v3 offset) : offset(offset), engine(11), distPercent(0, 1) {
+    size = {94, 94, 94};
     Voxels.resize(size.x * size.y * size.z);
-    generate();
+    generateSpaceShip();
   }
 
   Voxel& get(v3 pos) {
+    pos -= offset;
     if (pos.x < 0 || pos.x >= size.x) {
       Default = Voxel();
       return Default;
@@ -235,11 +421,22 @@ public:
     return size;
   }
 
+  const v3& getOffset() const {
+    return offset;
+  }
+
 };
 
 class VoxelMap {
 public:
 
+};
+
+class VoxelRaycast {
+public:
+  VoxelRaycast(const v3f& start, const v3f& direction) {
+
+  }
 };
 
 #endif //TUTORIALS_MAP_H

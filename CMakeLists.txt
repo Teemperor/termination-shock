@@ -42,12 +42,16 @@ add_executable(tutorial06_keyboard_and_mouse
 	common/shader.hpp
 	common/texture.cpp
 	common/texture.hpp
-	
-	tutorial06_keyboard_and_mouse/TransformVertexShader.vertexshader
-	tutorial06_keyboard_and_mouse/TextureFragmentShader.fragmentshader
+
 	tutorial06_keyboard_and_mouse/Map.cpp
 	tutorial06_keyboard_and_mouse/Map.h
-		tutorial06_keyboard_and_mouse/RenderWindow.cpp tutorial06_keyboard_and_mouse/RenderWindow.h tutorial06_keyboard_and_mouse/Camera.cpp tutorial06_keyboard_and_mouse/Camera.h tutorial06_keyboard_and_mouse/Controls.cpp tutorial06_keyboard_and_mouse/Controls.h)
+	tutorial06_keyboard_and_mouse/RenderWindow.cpp
+	tutorial06_keyboard_and_mouse/RenderWindow.h
+	tutorial06_keyboard_and_mouse/Camera.cpp
+	tutorial06_keyboard_and_mouse/Camera.h
+	tutorial06_keyboard_and_mouse/Controls.cpp
+	tutorial06_keyboard_and_mouse/Controls.h
+)
 target_link_libraries(tutorial06_keyboard_and_mouse
 	${ALL_LIBS}
 )

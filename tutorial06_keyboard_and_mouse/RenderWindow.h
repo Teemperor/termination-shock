@@ -80,10 +80,10 @@ public:
         }
         else {
           //Use Vsync
-          if (SDL_GL_SetSwapInterval(1) < 0) {
-            printf("Warning: Unable to set VSync! SDL Error: %s\n",
-                   SDL_GetError());
-          }
+          //if (SDL_GL_SetSwapInterval(1) < 0) {
+          //  printf("Warning: Unable to set VSync! SDL Error: %s\n",
+          //         SDL_GetError());
+          //}
 
           //Initialize OpenGL
           if (!initGL()) {

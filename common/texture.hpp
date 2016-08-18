@@ -2,7 +2,7 @@
 #define TEXTURE_HPP
 
 // Load a .BMP file using our custom loader
-GLuint loadBMP_custom(const char * imagepath);
+GLuint loadBMP_custom(const char * imagepath, bool nearest);
 
 //// Since GLFW 3, glfwLoadTexture2D() has been removed. You have to use another texture loading library, 
 //// or do it yourself (just like loadBMP_custom and loadDDS)

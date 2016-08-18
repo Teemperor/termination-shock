@@ -23,9 +23,12 @@ using namespace glm;
 #include <random>
 #include <map>
 #include <cstring>
+#include <sstream>
 #include "Map.h"
 #include "Camera.h"
 #include "Controls.h"
+
+# define M_PI           3.14159265358979323846  /* pi */
 
 class FPSCounter {
   unsigned frames = 0;
@@ -52,7 +55,23 @@ public:
   }
 };
 
-# define M_PI           3.14159265358979323846  /* pi */
+
+using namespace std;
+
+void split(const string &s, char delim, vector<string> &elems) {
+  stringstream ss(s);
+  string item;
+  while (getline(ss, item, delim)) {
+    elems.push_back(item);
+  }
+}
+
+
+vector<string> split(const string &s, char delim) {
+  vector<string> elems;
+  split(s, delim, elems);
+  return elems;
+}
 
 class Texture {
 
@@ -63,7 +82,10 @@ public:
   }
 
   Texture(const std::string &Path) {
-    Handle = loadBMP_custom(Path.c_str());
+    auto Parts = split(Path, ':');
+    assert(Parts.size() == 2);
+    assert(Parts[1] == "linear" || Parts[1] == "nearest");
+    Handle = loadBMP_custom(Parts[0].c_str(), Parts[1] == "nearest");
   }
 
   void activate() {
@@ -142,21 +164,13 @@ const std::string &TextureID::getPath() {
   return TextureManager.getName(ID);
 }
 
-struct v3f {
-  GLfloat x, y, z;
-
-  v3f(GLfloat x, GLfloat y, GLfloat z) : x(x), y(y), z(z) {
-
-  }
-};
-
 struct Rec {
 
   std::vector<GLfloat> vertexes;
   std::vector<GLfloat> uvs;
 
   Rec(const v3f &d, const v3f &c, const v3f &b, const v3f &a,
-      std::pair<float, float> uvStart, float us, float vs) {
+      std::pair<float, float> uvStart = {0, 0}, float us = 1, float vs = 1) {
 
     std::pair<float, float> uvEnd = std::make_pair(uvStart.first + us,
                                                    uvStart.second + vs);
@@ -186,6 +200,99 @@ class TexRecArray {
 
   GLuint vertexbuffer;
   GLuint uvbuffer;
+
+  std::vector<GLfloat> vertexes;
+  std::vector<GLfloat> uvs;
+
+  GLuint VertexArrayID;
+
+  TextureID Texture;
+
+  bool Finalized = false;
+
+public:
+  TexRecArray(const std::string &TexturePath) : Texture(
+    TextureManager.loadTexture(TexturePath)) {
+  }
+
+  ~TexRecArray() {
+    reset();
+  }
+
+  void add(const Rec &R) {
+    vertexes.insert(vertexes.begin(), R.vertexes.begin(), R.vertexes.end());
+    uvs.insert(uvs.begin(), R.uvs.begin(), R.uvs.end());
+  }
+
+  void reset() {
+    vertexes.clear();
+    uvs.clear();
+    if (!Finalized)
+      return;
+    Finalized = false;
+    glDeleteBuffers(1, &vertexbuffer);
+    glDeleteBuffers(1, &uvbuffer);
+    glDeleteVertexArrays(1, &VertexArrayID);
+  }
+
+  void finalize() {
+    assert(!Finalized);
+    Finalized = true;
+
+    glGenVertexArrays(1, &VertexArrayID);
+    glBindVertexArray(VertexArrayID);
+
+    glGenBuffers(1, &vertexbuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+    glBufferData(GL_ARRAY_BUFFER, vertexes.size() * sizeof(GLfloat),
+                 vertexes.data(), GL_STATIC_DRAW);
+
+    glGenBuffers(1, &uvbuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
+    glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(GLfloat), uvs.data(),
+                 GL_STATIC_DRAW);
+  }
+
+  void draw() {
+    Texture.activate();
+
+    // 1rst attribute buffer : vertices
+    glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+    glVertexAttribPointer(
+      0,                  // attribute. No particular reason for 0, but must match the layout in the shader.
+      3,                  // size
+      GL_FLOAT,           // type
+      GL_FALSE,           // normalized?
+      0,                  // stride
+      (void *) 0          // array buffer offset
+    );
+
+    // 2nd attribute buffer : UVs
+    glEnableVertexAttribArray(1);
+    glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
+    glVertexAttribPointer(
+      1,                                // attribute. No particular reason for 1, but must match the layout in the shader.
+      2,                                // size : U+V => 2
+      GL_FLOAT,                         // type
+      GL_FALSE,                         // normalized?
+      0,                                // stride
+      (void *) 0                        // array buffer offset
+    );
+
+    // Draw the triangle !
+    glDrawArrays(GL_TRIANGLES, 0, vertexes.size() / 3);
+
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+  }
+};
+
+
+class BlockSideArray {
+
+  GLuint vertexbuffer;
+  GLuint uvbuffer;
   GLuint lightbuffer;
   GLuint occlusionbuffer;
 
@@ -201,18 +308,12 @@ class TexRecArray {
   bool Finalized = false;
 
 public:
-  TexRecArray(const std::string &TexturePath) : Texture(
+  BlockSideArray(const std::string &TexturePath) : Texture(
     TextureManager.loadTexture(TexturePath)) {
   }
 
-  ~TexRecArray() {
-    if (!Finalized)
-      return;
-    glDeleteBuffers(1, &vertexbuffer);
-    glDeleteBuffers(1, &uvbuffer);
-    glDeleteBuffers(1, &lightbuffer);
-    glDeleteBuffers(1, &occlusionbuffer);
-    glDeleteVertexArrays(1, &VertexArrayID);
+  ~BlockSideArray() {
+    reset();
   }
 
   void add(const std::vector<GLfloat> &v, const std::vector<GLfloat> &u,
@@ -239,6 +340,21 @@ public:
   void add(const Rec &R) {
     vertexes.insert(vertexes.begin(), R.vertexes.begin(), R.vertexes.end());
     uvs.insert(uvs.begin(), R.uvs.begin(), R.uvs.end());
+  }
+
+  void reset() {
+    vertexes.clear();
+    uvs.clear();
+    lights.clear();
+    occlusion.clear();
+    if (!Finalized)
+      return;
+    Finalized = false;
+    glDeleteBuffers(1, &vertexbuffer);
+    glDeleteBuffers(1, &uvbuffer);
+    glDeleteBuffers(1, &lightbuffer);
+    glDeleteBuffers(1, &occlusionbuffer);
+    glDeleteVertexArrays(1, &VertexArrayID);
   }
 
   void finalize() {
@@ -271,8 +387,6 @@ public:
 
   void draw() {
     Texture.activate();
-
-    glUniform1f(1, 1.0f);
 
     // 1rst attribute buffer : vertices
     glEnableVertexAttribArray(0);
@@ -329,6 +443,23 @@ public:
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
     glDisableVertexAttribArray(2);
+    glDisableVertexAttribArray(3);
+  }
+};
+
+class DeepSpaceRenderer {
+  BlockSideArray Array;
+
+public:
+  DeepSpaceRenderer() : Array("earth.bmp:linear") {
+    const float size = 15000;
+    const float distance = -19000;
+    Array.add(Rec(v3f(size, -size, distance), v3f(size, size, distance), v3f(-size, size, distance), v3f(-size, -size, distance)));
+    Array.finalize();
+  }
+
+  void draw() {
+    Array.draw();
   }
 };
 
@@ -355,15 +486,15 @@ public:
 
 class VoxelMapRenderer {
 
-  VoxelChunk &Map;
-  TexRecArray Array;
+  VoxelChunk *Map;
+  BlockSideArray Array;
 
   static constexpr float ONE_THIRD = 1.0f / 3.0f;
 
 #define LIGHT_SUM(ax, ay, az, bx, by, bz, cx, cy, cz) \
-   (Map.get({pos.x + ax, pos.y + ay, pos.z + az}).isFree() ? ONE_THIRD : 0.1f) \
- + (Map.get({pos.x + bx, pos.y + by, pos.z + bz}).isFree() ? ONE_THIRD : 0.1f) \
- + (Map.get({pos.x + cx, pos.y + cy, pos.z + cz}).isFree() ? ONE_THIRD : 0.1f);
+   (Map->get({pos.x + ax, pos.y + ay, pos.z + az}).isFree() ? ONE_THIRD : 0.1f) \
+ + (Map->get({pos.x + bx, pos.y + by, pos.z + bz}).isFree() ? ONE_THIRD : 0.1f) \
+ + (Map->get({pos.x + cx, pos.y + cy, pos.z + cz}).isFree() ? ONE_THIRD : 0.1f);
 
   std::array<GLfloat, 6> getOcclusionLighting(const v3& pos, unsigned side) {
     std::array<GLfloat, 6> Result = {1, 1, 1, 1, 1, 1};
@@ -463,15 +594,23 @@ class VoxelMapRenderer {
   }
 
 public:
-  VoxelMapRenderer(VoxelChunk &Map) : Map(Map), Array("textures.bmp") {
+  VoxelMapRenderer(VoxelChunk &Map) : Array("textures.bmp:nearest") {
+    setMap(&Map);
+  }
+  VoxelMapRenderer() : Array("textures.bmp:nearest") {
+  }
+
+  void setMap(VoxelChunk *M) {
+    Map = M;
     recreate();
   }
 
   void recreate() {
-    for (int64_t x = 0; x < Map.getSize().x; ++x) {
-      for (int64_t y = 0; y < Map.getSize().y; ++y) {
-        for (int64_t z = 0; z < Map.getSize().z; ++z) {
-          AnnotatedVoxel V = Map.getAnnotated({x, y, z});
+    Array.reset();
+    for (int64_t x = Map->getOffset().x; x < Map->getSize().x + Map->getOffset().x; ++x) {
+      for (int64_t y = Map->getOffset().y; y < Map->getSize().y + Map->getOffset().y; ++y) {
+        for (int64_t z = Map->getOffset().z; z < Map->getSize().z + Map->getOffset().z; ++z) {
+          AnnotatedVoxel V = Map->getAnnotated({x, y, z});
           if (V.V.isFree())
             continue;
           const float us = Voxel::TEX_SIZE;
@@ -532,10 +671,9 @@ int main(void) {
   Controls controls;
   RenderWindow window(1024, 768);
 
-  FPSCounter Counter;
 
   // Dark blue background
-  glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
+  glClearColor(0.00f, 0.00f, 0.00f, 1.0f);
 
   // Enable depth test
   glEnable(GL_DEPTH_TEST);
@@ -546,67 +684,104 @@ int main(void) {
   // glEnable(GL_CULL_FACE);
 
   // Create and compile our GLSL program from the shaders
-  GLuint programID = LoadShaders("TransformVertexShader.vertexshader",
-                                 "TextureFragmentShader.fragmentshader");
+  GLuint BlockProgramID = LoadShaders("BlockVertexShader.vert",
+                                 "BlockFragmentShader.frag");
 
   // Get a handle for our "MVP" uniform
-  GLuint MatrixID = glGetUniformLocation(programID, "MVP");
+  GLuint MatrixID = glGetUniformLocation(BlockProgramID, "MVP");
 
   // Get a handle for our "myTextureSampler" uniform
-  GLuint TextureID = glGetUniformLocation(programID, "myTextureSampler");
+  GLuint TextureID = glGetUniformLocation(BlockProgramID, "myTextureSampler");
 
 
-  VoxelChunk map({40, 40, 40});
-  std::cout << "Created\n";
-  FPSCounter timer;
-  VoxelMapRenderer mapRenderer(map);
-  std::cout << "Made chunk in " << timer.getMillis() << " millis\n";
+  // Create and compile our GLSL program from the shaders
+  GLuint SpaceProgramID = LoadShaders("DeepSpaceVertexShader.vert",
+                                      "DeepSpaceFragmentShader.frag");
+
+  // Get a handle for our "MVP" uniform
+  GLuint SpaceMatrixID = glGetUniformLocation(SpaceProgramID, "MVP");
+
+  // Get a handle for our "myTextureSampler" uniform
+  GLuint SpaceTextureID = glGetUniformLocation(SpaceProgramID, "myTextureSampler");
+
+
+  FPSCounter Counter;
+
 
   bool run = true;
 
-  {
+  std::vector<VoxelChunk> Chunks;
 
-    do {
+  //for (int x = 0; x < 100; x += 32) {
+  //  for (int z = 0; z < 100; z += 32) {
+  //    Chunks.push_back(VoxelChunk({x, 0, z}));
+  ///  }
+  //}
 
-      // Clear the screen
-      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  VoxelChunk Chunk({0, 0, 0});
 
-      // Use our shader
-      glUseProgram(programID);
+  std::vector<VoxelMapRenderer> Renderer;
+  for (auto &Chunk : Chunks)
+    Renderer.push_back(Chunk);
 
-      // Compute the MVP matrix from keyboard and mouse input
-      glm::mat4 ProjectionMatrix = camera.getProjectionMatrix();
-      glm::mat4 ViewMatrix = camera.getViewMatrix();
-      glm::mat4 ModelMatrix = glm::mat4(1.0);
-      glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+  VoxelMapRenderer Si(Chunk);
 
-      // Send our transformation to the currently bound shader,
-      // in the "MVP" uniform
-      glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
+  DeepSpaceRenderer DeepSpace;
 
-      mapRenderer.draw();
+  do {
 
-      Counter.addFrame();
+    // Clear the screen
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-      window.swap();
 
-      SDL_Event event;
-      while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
-          run = false;
-        controls.handleEvent(event);
-        camera.handleEvent(event);
-      }
-      controls.update();
-      camera.updatePos(controls.getX(), controls.getY());
-    } // Check if the ESC key was pressed or the window was closed
-    while (run);
+    // Compute the MVP matrix from keyboard and mouse input
+    glm::mat4 ProjectionMatrix = camera.getProjectionMatrix();
+    glm::mat4 ViewMatrix = camera.getViewMatrix();
+    glm::mat4 ModelMatrix = glm::mat4(1.0);
+    glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
-  }
+    // Use our shader
+    glUseProgram(BlockProgramID);
+
+    // Send our transformation to the currently bound shader,
+    // in the "MVP" uniform
+    glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
+
+    for (auto &R : Renderer)
+      R.draw();
+    Si.draw();
+
+    // Use our shader
+    glUseProgram(SpaceProgramID);
+
+    // Send our transformation to the currently bound shader,
+    // in the "MVP" uniform
+    glUniformMatrix4fv(SpaceMatrixID, 1, GL_FALSE, &MVP[0][0]);
+
+    DeepSpace.draw();
+
+    Counter.addFrame();
+
+    window.swap();
+
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+      if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
+        run = false;
+      controls.handleEvent(event);
+      camera.handleEvent(event);
+    }
+    controls.update();
+    camera.updatePos(controls.getX(), controls.getY());
+  } // Check if the ESC key was pressed or the window was closed
+  while (run);
 
   // Cleanup VBO and shader
-  glDeleteProgram(programID);
+  glDeleteProgram(BlockProgramID);
   glDeleteTextures(1, &TextureID);
+
+  glDeleteProgram(SpaceProgramID);
+  glDeleteTextures(1, &SpaceTextureID);
 
   return 0;
 }
