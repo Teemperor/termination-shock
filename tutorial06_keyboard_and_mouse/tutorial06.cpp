@@ -833,9 +833,7 @@ int main(void) {
         if (Chunk.get(cameraVoxel).isFree())
           continue;
 
-        Chunk.get(cameraVoxel) = Voxel::AIR;
-
-        Chunk.relight();
+        Chunk.setBlock(cameraVoxel, Voxel::AIR);
 
         Renderer.recreateSurrounding(cameraVoxel);
         break;

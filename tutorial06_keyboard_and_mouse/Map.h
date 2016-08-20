@@ -15,6 +15,7 @@
 #include <tuple>
 #include <set>
 #include <GL/glew.h>
+#include <unordered_set>
 
 struct v3 {
   int64_t x, y, z;
@@ -72,7 +73,28 @@ struct v3 {
     z *= Scale;
     return *this;
   }
+
+
+  double length() const {
+    return std::sqrt(x * x + y * y + z * z);
+  }
+
+  double distance(const v3&other) const {
+    v3 diff = other - *this;
+    return diff.length();
+  }
 };
+
+namespace std {
+  template <> struct hash<v3>
+  {
+    size_t operator()(const v3 & v) const
+    {
+      return (size_t) (v.x ^ v.y ^ v.z);
+      /* your code here, e.g. "return hash<int>()(x.value);" */
+    }
+  };
+}
 
 struct v3f {
   float x, y, z;
@@ -83,8 +105,9 @@ struct v3f {
 
 
 class Voxel {
+  uint16_t Light = 0;
   uint8_t Type = 0;
-  uint8_t Light = 0;
+  uint8_t Dummy = 0;
 public:
 
   static constexpr uint8_t LightMin = 0;
@@ -120,8 +143,12 @@ public:
     Light = L;
   }
 
-  void increaseLight(uint8_t addLight) {
-    Light = (uint8_t) std::min(255u, (unsigned) Light + (unsigned)addLight);
+  void increaseLight(uint16_t addLight) {
+    Light += addLight;
+  }
+
+  void decreaseLight(uint16_t addLight) {
+    Light -= addLight;
   }
 
   bool isDark() const {
@@ -129,11 +156,11 @@ public:
   }
 
   float lightPercent() const {
-    return ((float) Light) / std::numeric_limits<uint8_t>::max();
+    return ((float) light()) / std::numeric_limits<uint8_t>::max();
   }
 
   uint8_t light() const {
-    return Light;
+    return (uint8_t) std::min<uint16_t>(std::numeric_limits<uint8_t>::max(), Light);
   }
 
   bool is(Types T) const {
@@ -338,10 +365,12 @@ class VoxelChunk {
     return hasChanged;
   }
 
-  void spreadLight(v3 startPos, uint8_t light = 255) {
+  void spreadLight(v3 startPos, const bool increase, uint8_t light = 255) {
     std::vector<v3> ToHandle = {startPos};
     std::vector<v3> ToHandleNext;
-    std::set<v3> Handled;
+    std::unordered_set<v3> Handled;
+    Handled.reserve(400);
+
 
     while (true) {
       if (ToHandle.empty()) {
@@ -358,7 +387,10 @@ class VoxelChunk {
       v3 pos = ToHandle.back();
       ToHandle.pop_back();
 
-      get(pos).increaseLight(light);
+      if (increase)
+        get(pos).increaseLight(light);
+      else
+        get(pos).decreaseLight(light);
 
       static const std::array<v3, 6> Offsets = {
         v3(0, 0, 1),
@@ -398,12 +430,19 @@ class VoxelChunk {
             get({x, 12, z}) = Voxel::METAL_WALL;
           }
         }
+        if (x % 16 == 4 && z % 16 == 4) {
+          get({x, 15, z}) = Voxel::LAMP;
+          lights.push_back({x, 14, z});
+          lights.push_back({x, 16, z});
+        }
       }
     }
     relight();
   }
 
   Voxel Default;
+
+  std::vector<v3> lights;
 
 public:
   VoxelChunk(v3 offset) : offset(offset), engine(11), distPercent(0, 1) {
@@ -412,22 +451,32 @@ public:
     generateSpaceShip();
   }
 
-  void relight() {
-    for (int64_t x = offset.x; x < size.x + offset.x; ++x) {
-      for (int64_t y = offset.y; y < size.y + offset.y; ++y) {
-        for (int64_t z = offset.z; z < size.z + offset.z; ++z) {
-          get({x, y, z}).setLight(0);
-        }
+  void setBlock(v3 pos, Voxel v) {
+    for (auto &light : lights) {
+      if (light.distance(pos) < 8) {
+        spreadLight(light, false);
       }
     }
+    get(pos) = v;
+    for (auto &light : lights) {
+      if (light.distance(pos) < 8) {
+        spreadLight(light, true);
+      }
+    }
+  }
+
+  void relight() {
     for (int64_t x = 45; x < 60; ++x) {
       for (int64_t z = 45; z < 60; ++z) {
 
         if (x % 9 == 4 && z % 9 == 4) {
-          spreadLight({x, 14, z});
-          spreadLight({x, 16, z});
+          spreadLight({x, 14, z}, true);
+          spreadLight({x, 16, z}, true);
         }
       }
+    }
+    for (auto &light : lights) {
+      spreadLight(light, true);
     }
   }
 
