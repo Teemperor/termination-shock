@@ -139,6 +139,8 @@ public:
     METAL_WALL,
     METAL_CEILING,
     LAMP,
+    GENERATOR,
+    CRATE
   };
   Voxel() {
     assert(isDark());
@@ -214,8 +216,18 @@ public:
         return std::make_pair(2 * TEX_SIZE, 0);
 
 
+      case CRATE:
+        switch (side) {
+          case 0:
+          case 1:
+            return std::make_pair(1 * TEX_SIZE, 1 * TEX_SIZE);
+          default:
+            return std::make_pair(2 * TEX_SIZE, 1 * TEX_SIZE);
+        }
       case STEEL_WALL:
         return std::make_pair(0 * TEX_SIZE, 0);
+      case GENERATOR:
+        return std::make_pair(0, 1  * TEX_SIZE);
       case  STEEL_FLOOR:
         return std::make_pair(1 * TEX_SIZE, 0);
       case  METAL_WALL:
@@ -357,6 +369,7 @@ class VoxelChunk {
   }
 
   bool spreadLight() {
+    assert(false);
     bool hasChanged = false;
     for (int64_t x = offset.x; x < size.x + offset.x; ++x) {
       for (int64_t y = offset.y; y < size.y + offset.y; ++y) {
@@ -380,8 +393,7 @@ class VoxelChunk {
     std::vector<v3> ToHandle = {startPos};
     std::vector<v3> ToHandleNext;
     std::unordered_set<v3> Handled;
-    Handled.reserve(400);
-
+    Handled.reserve(800);
 
     while (true) {
       if (ToHandle.empty()) {
@@ -426,8 +438,8 @@ class VoxelChunk {
         v3(-1, -1, -1),
       };
 
-      for (int x = -1; x <= 1; ++x)
-        for (int y = -1; y <= 1; ++y)
+      for (int x = -1; x <= 1; ++x) {
+        for (int y = -1; y <= 1; ++y) {
           for (int z = -1; z <= 1; ++z) {
             v3 iterPos(pos.x + x, pos.y + y, pos.z + z);
 
@@ -439,6 +451,8 @@ class VoxelChunk {
               ToHandleNext.push_back(iterPos);
               Handled.insert(iterPos);
             }
+          }
+        }
       }
     }
   }

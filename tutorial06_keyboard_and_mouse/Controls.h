@@ -20,6 +20,8 @@ class Controls {
 
   bool jump = false;
 
+  int blockType = 0;
+
 public:
 
   void handleEvent(const SDL_Event& event) {
@@ -53,6 +55,11 @@ public:
           break;
       }
     }
+    if (event.type == SDL_KEYDOWN) {
+      if (event.key.keysym.sym >= SDLK_1 && event.key.keysym.sym <= SDLK_9) {
+        blockType = event.key.keysym.sym - SDLK_1;
+      }
+    }
   }
 
   void update() {
@@ -65,6 +72,10 @@ public:
       x += 1;
     if (left)
       x -= 1;
+  }
+
+  int getBlockType() const {
+    return blockType;
   }
 
   bool jumpPoll() {

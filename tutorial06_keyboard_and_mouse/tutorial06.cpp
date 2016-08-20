@@ -785,6 +785,14 @@ int main(void) {
 
   MovingEntity Player(&Chunk);
 
+  std::vector<Voxel::Types> BlockTypes = {
+    Voxel::CRATE,
+    Voxel::STEEL_FLOOR,
+    Voxel::STEEL_WALL,
+    Voxel::GENERATOR
+  };
+  Voxel::Types SelectedType = BlockTypes[0];
+
   Uint64 LAST = 0;
 
   do {
@@ -844,6 +852,9 @@ int main(void) {
     Player.update(deltaTime);
     camera.setPos(Player.position().x, Player.position().y, Player.position().z);
 
+    if (controls.getBlockType() < BlockTypes.size())
+      SelectedType = BlockTypes[controls.getBlockType()];
+
     if (false) {
       auto cameraPos = camera.getPosition();
       v3 cameraVoxel((int64_t) cameraPos.x, (int64_t) cameraPos.y,
@@ -887,7 +898,7 @@ int main(void) {
         if (lastFreePos != camera.getPosition()) {
           v3 lastFreeVoxel((int64_t) lastFreePos.x, (int64_t) lastFreePos.y,
                          (int64_t) lastFreePos.z);
-          Chunk.setBlock(lastFreeVoxel, Voxel::METAL_WALL);
+          Chunk.setBlock(lastFreeVoxel, SelectedType);
 
           Renderer.recreateSurrounding(cameraVoxel);
         }
