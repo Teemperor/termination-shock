@@ -24,6 +24,8 @@ class Camera {
   float mouseSpeed = 0.005f;
   Uint64 LAST = 0;
 
+  glm::vec3 direction;
+
 public:
 
   glm::mat4 getViewMatrix(){
@@ -40,7 +42,7 @@ public:
     LAST = NOW;
 
     // Direction : Spherical coordinates to Cartesian coordinates conversion
-    glm::vec3 direction(
+    direction = glm::vec3(
       cos(verticalAngle) * sin(horizontalAngle),
       sin(verticalAngle),
       cos(verticalAngle) * cos(horizontalAngle)
@@ -83,6 +85,14 @@ public:
       horizontalAngle -= mouseSpeed * event.motion.xrel;
       verticalAngle   -= mouseSpeed * event.motion.yrel;
     }
+  }
+
+  glm::vec3 getDirection(float scale) const {
+    return glm::vec3(direction.x * scale, direction.y * scale, direction.z * scale);
+  }
+
+  glm::vec3 getPosition() const {
+    return position;
   }
 };
 

@@ -34,10 +34,42 @@ struct v3 {
     return std::tie(x, y, z) < std::tie(Other.x, Other.y, Other.z);
   }
 
+  v3 operator*(const int64_t Scale) const {
+    v3 result = *this;
+    result *= Scale;
+    return result;
+  }
+
+  v3 operator+(const v3&Other) const {
+    v3 result = *this;
+    result += Other;
+    return result;
+  }
+
+  v3 operator-(const v3&Other) const {
+    v3 result = *this;
+    result -= Other;
+    return result;
+  }
+
   v3& operator-=(const v3&Other) {
     x -= Other.x;
     y -= Other.y;
     z -= Other.z;
+    return *this;
+  }
+
+  v3& operator+=(const v3&Other) {
+    x += Other.x;
+    y += Other.y;
+    z += Other.z;
+    return *this;
+  }
+
+  v3& operator*=(const int64_t Scale) {
+    x *= Scale;
+    y *= Scale;
+    z *= Scale;
     return *this;
   }
 };
@@ -183,7 +215,7 @@ struct AnnotatedVoxel {
 class VoxelChunk {
 
   v3 offset;
-  v3 size;
+  v3 size = v3(getSize(), getSize(), getSize());
   std::vector<Voxel> Voxels;
 
   std::default_random_engine engine;
@@ -308,7 +340,7 @@ class VoxelChunk {
 
   void spreadLight(v3 startPos, uint8_t light = 255) {
     std::vector<v3> ToHandle = {startPos};
-    std::vector<v3> ToHandleNext = {};
+    std::vector<v3> ToHandleNext;
     std::set<v3> Handled;
 
     while (true) {
@@ -322,39 +354,38 @@ class VoxelChunk {
           break;
         }
         std::swap(ToHandle, ToHandleNext);
-        //ToHandle = ToHandleNext;
-        //ToHandleNext.clear();
       }
       v3 pos = ToHandle.back();
       ToHandle.pop_back();
 
       get(pos).increaseLight(light);
 
-      for (int64_t x = pos.x - 1; x <= pos.x + 1; ++x) {
-        for (int64_t y = pos.y - 1; y <= pos.y + 1; ++y) {
-          for (int64_t z = pos.z - 1; z <= pos.z + 1; ++z) {
-            v3 iterPos(x, y, z);
-            if (x != pos.x && y != pos.y && z != pos.z)
-              continue;
-            if (pos == iterPos)
-              continue;
-            //std::cout << x << "," << y << "," << z << std::endl;
+      static const std::array<v3, 6> Offsets = {
+        v3(0, 0, 1),
+        v3(0, 0, -1),
+        v3(0, 1, 0),
+        v3(0, -1, 0),
+        v3(1, 0, 0),
+        v3(-1, 0, 0),
+      };
 
-            if (!get(iterPos).isFree())
-              continue;
-            if (Handled.find(iterPos) == Handled.end()) {
-              ToHandleNext.push_back(iterPos);
-              Handled.insert(iterPos);
-              continue;
-            }
-          }
+      for (int i = 0; i < 6; ++i) {
+        v3 o = Offsets[i];
+        v3 iterPos(pos.x + o.x, pos.y + o.y, pos.z + o.z);
+
+        if (!get(iterPos).isFree())
+          continue;
+        if (light < 10)
+          continue;
+        if (Handled.find(iterPos) == Handled.end()) {
+          ToHandleNext.push_back(iterPos);
+          Handled.insert(iterPos);
         }
       }
     }
   }
 
   void generateSpaceShip() {
-    std::vector<v3> lights;
     for (int64_t x = 15; x < 90; ++x) {
       for (int64_t z = 15; z < 90; ++z) {
         get({x, 11, z}) = Voxel::STEEL_FLOOR;
@@ -367,25 +398,37 @@ class VoxelChunk {
             get({x, 12, z}) = Voxel::METAL_WALL;
           }
         }
-
-        if (x % 9 == 4 && z % 9 == 4) {
-          get({x, 15, z}) = Voxel::LAMP;
-          lights.push_back({x, 14, z});
-          lights.push_back({x, 16, z});
-        }
       }
     }
-    for (auto& pos : lights)
-      spreadLight(pos);
+    relight();
   }
 
   Voxel Default;
 
 public:
   VoxelChunk(v3 offset) : offset(offset), engine(11), distPercent(0, 1) {
-    size = {94, 94, 94};
+    size = {128, 128, 128};
     Voxels.resize(size.x * size.y * size.z);
     generateSpaceShip();
+  }
+
+  void relight() {
+    for (int64_t x = offset.x; x < size.x + offset.x; ++x) {
+      for (int64_t y = offset.y; y < size.y + offset.y; ++y) {
+        for (int64_t z = offset.z; z < size.z + offset.z; ++z) {
+          get({x, y, z}).setLight(0);
+        }
+      }
+    }
+    for (int64_t x = 45; x < 60; ++x) {
+      for (int64_t z = 45; z < 60; ++z) {
+
+        if (x % 9 == 4 && z % 9 == 4) {
+          spreadLight({x, 14, z});
+          spreadLight({x, 16, z});
+        }
+      }
+    }
   }
 
   Voxel& get(v3 pos) {
@@ -417,8 +460,8 @@ public:
     return Result;
   }
 
-  const v3& getSize() {
-    return size;
+  static size_t getSize() {
+    return 64;
   }
 
   const v3& getOffset() const {

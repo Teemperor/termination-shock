@@ -15,9 +15,19 @@ class Controls {
   float x = 0;
   float y = 0;
 
+  bool leftMouse = false;
+
 public:
 
   void handleEvent(const SDL_Event& event) {
+    if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
+      switch(event.button.button) {
+        case SDL_BUTTON_LEFT:
+          leftMouse = event.button.state == SDL_PRESSED;
+          break;
+      }
+    }
+
     if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
       switch (event.key.keysym.sym) {
         case SDLK_w:
@@ -46,6 +56,14 @@ public:
       x += 1;
     if (left)
       x -= 1;
+  }
+
+  bool leftMousePoll() {
+    if (leftMouse) {
+      leftMouse = false;
+      return true;
+    }
+    return false;
   }
 
   float getX() const {

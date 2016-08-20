@@ -386,6 +386,9 @@ public:
   }
 
   void draw() {
+    if (vertexes.empty())
+      return;
+
     Texture.activate();
 
     // 1rst attribute buffer : vertices
@@ -488,6 +491,9 @@ class VoxelMapRenderer {
 
   VoxelChunk *Map;
   BlockSideArray Array;
+
+  v3 offset;
+  v3 size = v3(getSize(), getSize(), getSize());
 
   static constexpr float ONE_THIRD = 1.0f / 3.0f;
 
@@ -594,23 +600,29 @@ class VoxelMapRenderer {
   }
 
 public:
-  VoxelMapRenderer(VoxelChunk &Map) : Array("textures.bmp:nearest") {
-    setMap(&Map);
+  VoxelMapRenderer(VoxelChunk &Map, v3 offset) : Array("textures.bmp:nearest") {
+    setMap(&Map, offset);
   }
   VoxelMapRenderer() : Array("textures.bmp:nearest") {
   }
 
-  void setMap(VoxelChunk *M) {
+  static size_t getSize() {
+    return 16;
+  }
+
+  void setMap(VoxelChunk *M, v3 offset) {
+    this->offset = offset;
+    this->size = size;
     Map = M;
     recreate();
   }
 
   void recreate() {
     Array.reset();
-    for (int64_t x = Map->getOffset().x; x < Map->getSize().x + Map->getOffset().x; ++x) {
-      for (int64_t y = Map->getOffset().y; y < Map->getSize().y + Map->getOffset().y; ++y) {
-        for (int64_t z = Map->getOffset().z; z < Map->getSize().z + Map->getOffset().z; ++z) {
-          AnnotatedVoxel V = Map->getAnnotated({x, y, z});
+    for (int64_t x = offset.x; x < size.x + offset.x; ++x) {
+      for (int64_t y = offset.y; y < size.y + offset.y; ++y) {
+        for (int64_t z = offset.z; z < size.z + offset.z; ++z) {
+          AnnotatedVoxel V = Map->getAnnotated(v3(x, y, z));
           if (V.V.isFree())
             continue;
           const float us = Voxel::TEX_SIZE;
@@ -664,6 +676,50 @@ public:
 
 };
 
+class VoxelRenderMap {
+
+  std::vector<VoxelMapRenderer *> Renders;
+
+public:
+  VoxelRenderMap(VoxelChunk& Chunk) {
+    const size_t renderSize = VoxelMapRenderer::getSize();
+    for (int64_t x = 0; x < Chunk.getSize(); x += renderSize)
+      for (int64_t y = 0; y < Chunk.getSize(); y += renderSize)
+        for (int64_t z = 0; z < Chunk.getSize(); z += renderSize)
+          Renders.push_back(new VoxelMapRenderer(Chunk, v3(x, y, z)));
+  }
+
+  VoxelMapRenderer *get(v3 pos) {
+    size_t rs = VoxelChunk::getSize() / VoxelMapRenderer::getSize();
+
+    size_t index = (pos.x / VoxelMapRenderer::getSize()) * rs * rs + (pos.y / VoxelMapRenderer::getSize()) * rs + (pos.z / VoxelMapRenderer::getSize());
+    if (index < Renders.size())
+      return Renders[index];
+    return nullptr;
+  }
+
+  void recreateSurrounding(v3 pos) {
+    static const std::array<v3, 7> Offsets = {
+      v3(0, 0, 0),
+      v3(0, 0, 1),
+      v3(0, 0, -1),
+      v3(0, 1, 0),
+      v3(0, -1, 0),
+      v3(1, 0, 0),
+      v3(-1, 0, 0),
+    };
+
+    for (int i = 0; i < Offsets.size(); ++i) {
+      if (auto R = get(pos + Offsets[i] * VoxelMapRenderer::getSize()))
+        R->recreate();
+    }
+  }
+
+  void draw() {
+    for (auto &R : Renders)
+      R->draw();
+  }
+};
 
 int main(void) {
 
@@ -710,8 +766,6 @@ int main(void) {
 
   bool run = true;
 
-  std::vector<VoxelChunk> Chunks;
-
   //for (int x = 0; x < 100; x += 32) {
   //  for (int z = 0; z < 100; z += 32) {
   //    Chunks.push_back(VoxelChunk({x, 0, z}));
@@ -720,11 +774,7 @@ int main(void) {
 
   VoxelChunk Chunk({0, 0, 0});
 
-  std::vector<VoxelMapRenderer> Renderer;
-  for (auto &Chunk : Chunks)
-    Renderer.push_back(Chunk);
-
-  VoxelMapRenderer Si(Chunk);
+  VoxelRenderMap Renderer(Chunk);
 
   DeepSpaceRenderer DeepSpace;
 
@@ -747,9 +797,7 @@ int main(void) {
     // in the "MVP" uniform
     glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
-    for (auto &R : Renderer)
-      R.draw();
-    Si.draw();
+    Renderer.draw();
 
     // Use our shader
     glUseProgram(SpaceProgramID);
@@ -773,6 +821,27 @@ int main(void) {
     }
     controls.update();
     camera.updatePos(controls.getX(), controls.getY());
+
+    if (controls.leftMousePoll()) {
+
+      for (int i = 0; i < 30; ++i) {
+        auto cameraPos = camera.getPosition() + camera.getDirection(i / 4.0f);
+
+        v3 cameraVoxel((int64_t) cameraPos.x, (int64_t) cameraPos.y,
+                       (int64_t) cameraPos.z);
+
+        if (Chunk.get(cameraVoxel).isFree())
+          continue;
+
+        Chunk.get(cameraVoxel) = Voxel::AIR;
+
+        Chunk.relight();
+
+        Renderer.recreateSurrounding(cameraVoxel);
+        break;
+      }
+    }
+
   } // Check if the ESC key was pressed or the window was closed
   while (run);
 
