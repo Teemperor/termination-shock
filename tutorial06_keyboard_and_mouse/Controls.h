@@ -18,6 +18,8 @@ class Controls {
   bool leftMouse = false;
   bool rightMouse = false;
 
+  bool jump = false;
+
 public:
 
   void handleEvent(const SDL_Event& event) {
@@ -46,6 +48,9 @@ public:
         case SDLK_d:
           right = event.type == SDL_KEYDOWN;
           break;
+        case SDLK_SPACE:
+          jump = event.type == SDL_KEYDOWN;
+          break;
       }
     }
   }
@@ -60,6 +65,14 @@ public:
       x += 1;
     if (left)
       x -= 1;
+  }
+
+  bool jumpPoll() {
+    if (jump) {
+      jump = false;
+      return true;
+    }
+    return false;
   }
 
   bool leftMousePoll() {

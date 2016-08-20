@@ -35,6 +35,46 @@ public:
     return ProjectionMatrix;
   }
 
+  void setPos(float x, float y, float z) {
+
+    Uint64 NOW = SDL_GetPerformanceCounter();
+    float deltaTime = (((float) NOW - LAST) / SDL_GetPerformanceFrequency());
+    LAST = NOW;
+
+    // Direction : Spherical coordinates to Cartesian coordinates conversion
+    direction = glm::vec3(
+      cos(verticalAngle) * sin(horizontalAngle),
+      sin(verticalAngle),
+      cos(verticalAngle) * cos(horizontalAngle)
+    );
+
+    // Right vector
+    glm::vec3 right = glm::vec3(
+      sin(horizontalAngle - 3.14f/2.0f),
+      0,
+      cos(horizontalAngle - 3.14f/2.0f)
+    );
+
+    // Up vector
+    const glm::vec3 up = glm::cross( right, direction );
+
+    position.x = x;
+    position.y = y;
+    position.z = z;
+
+
+    float FoV = initialFoV;// - 5 * glfwGetMouseWheel(); // Now GLFW 3 requires setting up a callback for this. It's a bit too complicated for this beginner's tutorial, so it's disabled instead.
+
+    // Projection matrix : 45� Field of View, 4:3 ratio, display range : 0.1 unit <-> 100 units
+    ProjectionMatrix = glm::perspective(FoV, 4.0f / 3.0f, 0.1f, 30000.0f);
+    // Camera matrix
+    ViewMatrix       = glm::lookAt(
+      position,           // Camera is here
+      position+direction, // and looks here : at the same position, plus "direction"
+      up                  // Head is up (set to 0,-1,0 to look upside-down)
+    );
+  }
+
   void updatePos(float x, float y) {
 
     Uint64 NOW = SDL_GetPerformanceCounter();
@@ -73,6 +113,10 @@ public:
       up                  // Head is up (set to 0,-1,0 to look upside-down)
     );
 
+  }
+
+  float getHorizAngle() {
+    return horizontalAngle;
   }
 
   void handleEvent(const SDL_Event& event){

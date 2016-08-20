@@ -16,6 +16,9 @@
 #include <set>
 #include <GL/glew.h>
 #include <unordered_set>
+#include <math.h>
+
+#define PI 3.1415926535f
 
 struct v3 {
   int64_t x, y, z;
@@ -100,18 +103,25 @@ namespace std {
 struct v3f {
   float x, y, z;
 
+  v3f() {
+
+  }
   v3f(float x, float y, float z) : x(x), y(y), z(z) {
+  }
+
+  v3 toVoxelPos() {
+    return {(int64_t) x, (int64_t) y, (int64_t) z};
   }
 };
 
 
 class Voxel {
-  uint16_t Light = 0;
+  uint16_t Light = 10;
   uint8_t Type = 0;
   uint8_t Dummy = 0;
 public:
 
-  static constexpr uint8_t LightMin = 0;
+  static constexpr uint8_t LightMin = 10;
   static constexpr float TEX_SIZE = 1.0f / 16;
 
   enum Types {
@@ -393,34 +403,49 @@ class VoxelChunk {
       else
         get(pos).decreaseLight(light);
 
-      static const std::array<v3, 6> Offsets = {
+      static const std::array<v3, 22> Offsets = {
         v3(0, 0, 1),
         v3(0, 0, -1),
         v3(0, 1, 0),
+        v3(0, 1, 1),
+        v3(0, 1, -1),
         v3(0, -1, 0),
-        v3(1, 0, 0),
-        v3(-1, 0, 0),
+        v3(0, -1, 1),
+        v3(0, -1, -1),
+        v3(1, 1, 0),
+        v3(1, 1, 1),
+        v3(1, 1, -1),
+        v3(1, -1, 0),
+        v3(1, -1, 1),
+        v3(1, -1, -1),
+        v3(-1, 1, 0),
+        v3(-1, 1, 1),
+        v3(-1, 1, -1),
+        v3(-1, -1, 0),
+        v3(-1, -1, 1),
+        v3(-1, -1, -1),
       };
 
-      for (int i = 0; i < 6; ++i) {
-        v3 o = Offsets[i];
-        v3 iterPos(pos.x + o.x, pos.y + o.y, pos.z + o.z);
+      for (int x = -1; x <= 1; ++x)
+        for (int y = -1; y <= 1; ++y)
+          for (int z = -1; z <= 1; ++z) {
+            v3 iterPos(pos.x + x, pos.y + y, pos.z + z);
 
-        if (!get(iterPos).isFree())
-          continue;
-        if (light < 10)
-          continue;
-        if (Handled.find(iterPos) == Handled.end()) {
-          ToHandleNext.push_back(iterPos);
-          Handled.insert(iterPos);
-        }
+            if (!get(iterPos).isFree())
+              continue;
+            if (light < 10)
+              continue;
+            if (Handled.find(iterPos) == Handled.end()) {
+              ToHandleNext.push_back(iterPos);
+              Handled.insert(iterPos);
+            }
       }
     }
   }
 
   void generateSpaceShip() {
-    for (int64_t x = 15; x < 90; ++x) {
-      for (int64_t z = 15; z < 90; ++z) {
+    for (int64_t x = 1; x < getSize() - 1; ++x) {
+      for (int64_t z = 1; z < getSize() - 1; ++z) {
         get({x, 11, z}) = Voxel::STEEL_FLOOR;
         get({x, 15, z}) = Voxel::METAL_CEILING;
 
@@ -433,8 +458,7 @@ class VoxelChunk {
         }
         if (x % 16 == 4 && z % 16 == 4) {
           get({x, 15, z}) = Voxel::LAMP;
-          lights.insert({x, 14, z});
-          lights.insert({x, 16, z});
+          lights.insert({x, 15, z});
         }
       }
     }
@@ -538,6 +562,95 @@ public:
     }
     return false;
   }
+};
+
+class Entity {
+protected:
+  v3f pos;
+  float rot = 0;
+
+public:
+  Entity() : pos(4, 14, 40) {
+
+  }
+
+  v3f position() const {
+    return pos;
+  }
+
+  void setRotation(float value) {
+    rot = value;
+  }
+
+  float rotation() const {
+    return rot;
+  }
+};
+
+class MovingEntity : public Entity {
+  VoxelChunk *Chunk;
+
+  v3f vel;
+
+  bool isHeightGood(float h) {
+    static const float r = 0.3f;
+  return
+      Chunk->get(v3f(pos.x + r, pos.y + h, pos.z - r).toVoxelPos()).isFree() &&
+      Chunk->get(v3f(pos.x - r, pos.y + h, pos.z - r).toVoxelPos()).isFree() &&
+      Chunk->get(v3f(pos.x + r, pos.y + h, pos.z + r).toVoxelPos()).isFree() &&
+      Chunk->get(v3f(pos.x - r, pos.y + h, pos.z + r).toVoxelPos()).isFree();
+  }
+
+  bool isPosGood() {
+    return isHeightGood(-2.0f) &&isHeightGood(-1.5f) && isHeightGood(-0.7f) && isHeightGood(0) && isHeightGood(0.3f);
+  }
+
+  bool tryIncrease(float& target, float value) {
+    float backup = target;
+    target += value;
+    if (!isPosGood()) {
+      target = backup;
+      return false;
+    }
+    return true;
+  }
+
+public:
+  MovingEntity(VoxelChunk *Chunk) : Chunk(Chunk), vel(0, 0, 0) {
+    vel.y = -0.4f;
+  }
+
+  void setMove(float hRot, float dx, float dz) {
+    const float speed = 5;
+    rot = hRot;
+    float moveRot = rot;
+    if (std::abs(dx) > 0.1f || std::abs(dz) > 0.1f) {
+    //  moveRot += std::atan2(dz, dx) - PI / 2;
+    }
+    vel.x = std::sin(moveRot) * dz * speed;
+    vel.x -= std::cos(moveRot) * dx * speed;
+    vel.z = std::cos(moveRot) * dz * speed;
+    vel.z += std::sin(moveRot) * dx * speed;
+  }
+
+  void jump() {
+    vel.y = 7.0f;
+  }
+
+  void update(float dtime) {
+    tryIncrease(pos.x, vel.x * dtime);
+    if (tryIncrease(pos.y, vel.y * dtime)) {
+      vel.y -= 20.0f * dtime;
+    } else {
+      vel.y = -0.1f;
+    }
+    tryIncrease(pos.z, vel.z * dtime);
+  }
+
+  bool onGround() {
+    return !isHeightGood(-2.2f);
+  }
+
 };
 
 class VoxelMap {

@@ -783,7 +783,17 @@ int main(void) {
 
   MovingLight CameraLight(&Chunk);
 
+  MovingEntity Player(&Chunk);
+
+  Uint64 LAST = 0;
+
   do {
+
+    Uint64 NOW = SDL_GetPerformanceCounter();
+    float deltaTime = (((float) NOW - LAST) / SDL_GetPerformanceFrequency());
+    if (LAST == 0)
+      deltaTime = 0;
+    LAST = NOW;
 
     // Clear the screen
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -825,7 +835,14 @@ int main(void) {
       camera.handleEvent(event);
     }
     controls.update();
-    camera.updatePos(controls.getX(), controls.getY());
+    //camera.updatePos(controls.getX(), controls.getY());
+
+    if (controls.jumpPoll())
+      if (Player.onGround())
+        Player.jump();
+    Player.setMove(camera.getHorizAngle(), controls.getX(), controls.getY());
+    Player.update(deltaTime);
+    camera.setPos(Player.position().x, Player.position().y, Player.position().z);
 
     if (false) {
       auto cameraPos = camera.getPosition();
@@ -835,6 +852,7 @@ int main(void) {
         Renderer.recreateSurrounding(cameraVoxel);
       }
     }
+
 
     if (controls.leftMousePoll()) {
       for (int i = 0; i < 20; ++i) {
