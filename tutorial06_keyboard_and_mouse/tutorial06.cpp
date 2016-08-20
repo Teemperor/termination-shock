@@ -706,13 +706,16 @@ public:
       v3(0, 1, 0),
       v3(0, -1, 0),
       v3(1, 0, 0),
-      v3(-1, 0, 0),
+      v3(-1, 0, 0)
     };
 
-    for (int i = 0; i < Offsets.size(); ++i) {
-      if (auto R = get(pos + Offsets[i] * VoxelMapRenderer::getSize()))
-        R->recreate();
-    }
+    for (int x = -1; x <= 1; ++x)
+      for (int y = -1; y <= 1; ++y)
+        for (int z = -1; z <= 1; ++z)
+          if (auto R = get(v3(pos.x + x * VoxelMapRenderer::getSize(),
+                           pos.y + y * VoxelMapRenderer::getSize(),
+                           pos.z + z * VoxelMapRenderer::getSize())))
+            R->recreate();
   }
 
   void draw() {
@@ -778,6 +781,8 @@ int main(void) {
 
   DeepSpaceRenderer DeepSpace;
 
+  MovingLight CameraLight(&Chunk);
+
   do {
 
     // Clear the screen
@@ -822,9 +827,17 @@ int main(void) {
     controls.update();
     camera.updatePos(controls.getX(), controls.getY());
 
-    if (controls.leftMousePoll()) {
+    if (false) {
+      auto cameraPos = camera.getPosition();
+      v3 cameraVoxel((int64_t) cameraPos.x, (int64_t) cameraPos.y,
+                     (int64_t) cameraPos.z);
+      if (CameraLight.setPos(cameraVoxel)) {
+        Renderer.recreateSurrounding(cameraVoxel);
+      }
+    }
 
-      for (int i = 0; i < 30; ++i) {
+    if (controls.leftMousePoll()) {
+      for (int i = 0; i < 20; ++i) {
         auto cameraPos = camera.getPosition() + camera.getDirection(i / 4.0f);
 
         v3 cameraVoxel((int64_t) cameraPos.x, (int64_t) cameraPos.y,
@@ -837,6 +850,31 @@ int main(void) {
 
         Renderer.recreateSurrounding(cameraVoxel);
         break;
+      }
+    }
+
+    if (controls.rightMousePoll()) {
+      vec3 lastFreePos = camera.getPosition();
+      for (int i = 0; i < 20; ++i) {
+        auto testPos = camera.getPosition() + camera.getDirection(i / 4.0f);
+
+        v3 cameraVoxel((int64_t) testPos.x, (int64_t) testPos.y,
+                       (int64_t) testPos.z);
+
+        if (Chunk.get(cameraVoxel).isFree()) {
+          lastFreePos = testPos;
+          continue;
+        }
+
+        if (lastFreePos != camera.getPosition()) {
+          v3 lastFreeVoxel((int64_t) lastFreePos.x, (int64_t) lastFreePos.y,
+                         (int64_t) lastFreePos.z);
+          Chunk.setBlock(lastFreeVoxel, Voxel::METAL_WALL);
+
+          Renderer.recreateSurrounding(cameraVoxel);
+        }
+        break;
+
       }
     }
 

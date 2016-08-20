@@ -22,6 +22,7 @@ struct v3 {
 
   v3() {
   }
+
   v3(int64_t x, int64_t y, int64_t z) : x(x), y(y), z(z) {}
 
   bool operator!=(const v3 &Other) const {
@@ -432,8 +433,8 @@ class VoxelChunk {
         }
         if (x % 16 == 4 && z % 16 == 4) {
           get({x, 15, z}) = Voxel::LAMP;
-          lights.push_back({x, 14, z});
-          lights.push_back({x, 16, z});
+          lights.insert({x, 14, z});
+          lights.insert({x, 16, z});
         }
       }
     }
@@ -442,13 +443,24 @@ class VoxelChunk {
 
   Voxel Default;
 
-  std::vector<v3> lights;
+  std::unordered_set<v3> lights;
 
 public:
   VoxelChunk(v3 offset) : offset(offset), engine(11), distPercent(0, 1) {
     size = {128, 128, 128};
     Voxels.resize(size.x * size.y * size.z);
     generateSpaceShip();
+  }
+
+  void addLight(v3 pos) {
+    lights.insert(pos);
+  }
+
+  void moveLight(v3 oldPos, v3 newPos) {
+    lights.erase(oldPos);
+    lights.insert(newPos);
+    spreadLight(oldPos, false);
+    spreadLight(newPos, true);
   }
 
   void setBlock(v3 pos, Voxel v) {
@@ -466,15 +478,6 @@ public:
   }
 
   void relight() {
-    for (int64_t x = 45; x < 60; ++x) {
-      for (int64_t z = 45; z < 60; ++z) {
-
-        if (x % 9 == 4 && z % 9 == 4) {
-          spreadLight({x, 14, z}, true);
-          spreadLight({x, 16, z}, true);
-        }
-      }
-    }
     for (auto &light : lights) {
       spreadLight(light, true);
     }
@@ -517,6 +520,24 @@ public:
     return offset;
   }
 
+};
+
+class MovingLight {
+  VoxelChunk *Chunk;
+  v3 pos;
+public:
+  MovingLight(VoxelChunk *Chunk, v3 pos = {0, 0, 0}) : Chunk(Chunk), pos(pos) {
+    Chunk->addLight(pos);
+  }
+
+  bool setPos(v3 newPos) {
+    if (newPos != pos) {
+      Chunk->moveLight(pos, newPos);
+      pos = newPos;
+      return true;
+    }
+    return false;
+  }
 };
 
 class VoxelMap {

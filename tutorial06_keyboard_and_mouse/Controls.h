@@ -16,6 +16,7 @@ class Controls {
   float y = 0;
 
   bool leftMouse = false;
+  bool rightMouse = false;
 
 public:
 
@@ -24,6 +25,9 @@ public:
       switch(event.button.button) {
         case SDL_BUTTON_LEFT:
           leftMouse = event.button.state == SDL_PRESSED;
+          break;
+        case SDL_BUTTON_RIGHT:
+          rightMouse = event.button.state == SDL_PRESSED;
           break;
       }
     }
@@ -61,6 +65,14 @@ public:
   bool leftMousePoll() {
     if (leftMouse) {
       leftMouse = false;
+      return true;
+    }
+    return false;
+  }
+
+  bool rightMousePoll() {
+    if (rightMouse) {
+      rightMouse = false;
       return true;
     }
     return false;
