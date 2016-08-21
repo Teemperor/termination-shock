@@ -7,16 +7,17 @@
 #include <SDL2/SDL_events.h>
 #include <SDL2/SDL_timer.h>
 #include <iostream>
+#include <common/Common.h>
 
 class Camera {
   glm::mat4 ViewMatrix;
   glm::mat4 ProjectionMatrix;
 // Initial position : on +Z
-  glm::vec3 position = glm::vec3(-4.92819, 68.359, -3.56799);
+  glm::vec3 position = glm::vec3(0, 0, 0);
 // Initial horizontal angle : toward -Z
-  float horizontalAngle = -5.31364f;
+  float horizontalAngle = 0;
 // Initial vertical angle : none
-  float verticalAngle = -7.03576f;
+  float verticalAngle = 0;
 // Initial Field of View
   float initialFoV = 45.0f;
 
@@ -128,6 +129,8 @@ public:
       // Compute new orientation
       horizontalAngle -= mouseSpeed * event.motion.xrel;
       verticalAngle   -= mouseSpeed * event.motion.yrel;
+
+      verticalAngle = std::max(-PI / 2, std::min(verticalAngle, PI / 2));
     }
   }
 

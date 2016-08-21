@@ -1,0 +1,6 @@
+#ifndef TUTORIALS_COMMON_H
+#define TUTORIALS_COMMON_H
+
+#define PI 3.1415926535f
+
+#endif //TUTORIALS_COMMON_H

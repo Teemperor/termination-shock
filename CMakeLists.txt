@@ -51,7 +51,7 @@ add_executable(tutorial06_keyboard_and_mouse
 	tutorial06_keyboard_and_mouse/Camera.h
 	tutorial06_keyboard_and_mouse/Controls.cpp
 	tutorial06_keyboard_and_mouse/Controls.h
-)
+		common/Common.h)
 target_link_libraries(tutorial06_keyboard_and_mouse
 	${ALL_LIBS}
 )

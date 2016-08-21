@@ -18,7 +18,6 @@
 #include <unordered_set>
 #include <math.h>
 
-#define PI 3.1415926535f
 
 struct v3 {
   int64_t x, y, z;
@@ -118,7 +117,7 @@ struct v3f {
 class Voxel {
   uint16_t Light = 10;
   uint8_t Type = 0;
-  uint8_t Dummy = 0;
+  uint8_t Lighted = 0;
 public:
 
   static constexpr uint8_t LightMin = 10;
@@ -154,6 +153,14 @@ public:
     if (L < LightMin)
       return;
     Light = L;
+  }
+
+  void markAsLighted(bool L) {
+    Lighted = (uint8_t) (L ? 1 : 0);
+  }
+
+  bool markedAsLighted() const {
+    return Lighted;
   }
 
   void increaseLight(uint16_t addLight) {
@@ -390,30 +397,42 @@ class VoxelChunk {
   }
 
   void spreadLight(v3 startPos, const bool increase, uint8_t light = 255) {
-    std::vector<v3> ToHandle = {startPos};
-    std::vector<v3> ToHandleNext;
-    std::unordered_set<v3> Handled;
-    Handled.reserve(800);
+    std::vector<v3> StorageA = {startPos};
+    StorageA.reserve(500);
+    std::vector<v3> StorageB;
+    StorageB.reserve(500);
+    std::vector<v3> *ToHandle = &StorageA;
+    std::vector<v3> *ToHandleNext = &StorageB;
+
+
+    for (int64_t x = -8 + startPos.x; x <= 8 + startPos.x; ++x) {
+      for (int64_t y = -8 + startPos.y; y <= 8 + startPos.y; ++y) {
+        for (int64_t z = -8 + startPos.z; z <= 8 + startPos.z; ++z) {
+          get({x, y, z}).markAsLighted(false);
+        }
+      }
+    }
+
+    const static float fallingFactor = 0.50f;
 
     while (true) {
-      if (ToHandle.empty()) {
-        if (ToHandleNext.empty())
+      if (ToHandle->empty()) {
+        if (ToHandleNext->empty())
           break;
-        if (light < 10)
+        if ((light * fallingFactor) <= Voxel::LightMin)
           break;
-        light *= 0.60;
-        if (light <= Voxel::LightMin) {
-          break;
-        }
+        light *= fallingFactor;
         std::swap(ToHandle, ToHandleNext);
       }
-      v3 pos = ToHandle.back();
-      ToHandle.pop_back();
+      v3 pos = ToHandle->back();
+      ToHandle->pop_back();
+
+      Voxel& C = get(pos);
 
       if (increase)
-        get(pos).increaseLight(light);
+        C.increaseLight(light);
       else
-        get(pos).decreaseLight(light);
+        C.decreaseLight(light);
 
       static const std::array<v3, 22> Offsets = {
         v3(0, 0, 1),
@@ -443,13 +462,16 @@ class VoxelChunk {
           for (int z = -1; z <= 1; ++z) {
             v3 iterPos(pos.x + x, pos.y + y, pos.z + z);
 
-            if (!get(iterPos).isFree())
+            if (x == 0 && z == 0 && y == 0)
               continue;
-            if (light < 10)
+
+            Voxel& V = get(iterPos);
+            if (!V.isFree())
               continue;
-            if (Handled.find(iterPos) == Handled.end()) {
-              ToHandleNext.push_back(iterPos);
-              Handled.insert(iterPos);
+
+            if (!V.markedAsLighted()) {
+              V.markAsLighted(true);
+              ToHandleNext->push_back(iterPos);
             }
           }
         }
@@ -635,7 +657,7 @@ public:
   }
 
   void setMove(float hRot, float dx, float dz) {
-    const float speed = 5;
+    const float speed = 4.5;
     rot = hRot;
     float moveRot = rot;
     if (std::abs(dx) > 0.1f || std::abs(dz) > 0.1f) {
