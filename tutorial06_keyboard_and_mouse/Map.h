@@ -85,7 +85,12 @@ struct v3 {
     v3 diff = other - *this;
     return diff.length();
   }
+
+  friend std::ostream &operator<<(std::ostream &os, v3 const &v) {
+    return os << v.x << ", " << v.y << ", " << v.z;
+  }
 };
+
 
 namespace std {
   template <> struct hash<v3>
@@ -93,7 +98,6 @@ namespace std {
     size_t operator()(const v3 & v) const
     {
       return (size_t) (v.x ^ v.y ^ v.z);
-      /* your code here, e.g. "return hash<int>()(x.value);" */
     }
   };
 }
@@ -155,11 +159,11 @@ public:
     Light = L;
   }
 
-  void markAsLighted(bool L) {
+  void mark(bool L) {
     Lighted = (uint8_t) (L ? 1 : 0);
   }
 
-  bool markedAsLighted() const {
+  bool marked() const {
     return Lighted;
   }
 
@@ -173,6 +177,10 @@ public:
 
   bool isDark() const {
     return Light <= LightMin;
+  }
+
+  void transform(Types T) {
+    Type = T;
   }
 
   bool blocksView() const {
@@ -200,6 +208,16 @@ public:
 
   bool isFree() const {
     return Type == AIR || Type == SPACE;
+  }
+
+#define VOXEL_NAME_MACRO(ENUM) case ENUM : return #ENUM
+
+  const char *getName() const {
+    switch(Type) {
+      VOXEL_NAME_MACRO(SPACE);
+      VOXEL_NAME_MACRO(AIR);
+      default: return "Unknown voxel";
+    }
   }
 
   std::pair<float, float> getUVOffset(unsigned side, bool airAbove) const {
@@ -423,7 +441,7 @@ class VoxelChunk {
     for (int64_t x = -maxLightDistance + startPos.x; x <= maxLightDistance + startPos.x; ++x) {
       for (int64_t y = -maxLightDistance + startPos.y; y <= maxLightDistance + startPos.y; ++y) {
         for (int64_t z = -maxLightDistance + startPos.z; z <= maxLightDistance + startPos.z; ++z) {
-          get({x, y, z}).markAsLighted(false);
+          get({x, y, z}).mark(false);
         }
       }
     }
@@ -453,29 +471,6 @@ class VoxelChunk {
       else
         C.decreaseLight(light);
 
-      static const std::array<v3, 22> Offsets = {
-        v3(0, 0, 1),
-        v3(0, 0, -1),
-        v3(0, 1, 0),
-        v3(0, 1, 1),
-        v3(0, 1, -1),
-        v3(0, -1, 0),
-        v3(0, -1, 1),
-        v3(0, -1, -1),
-        v3(1, 1, 0),
-        v3(1, 1, 1),
-        v3(1, 1, -1),
-        v3(1, -1, 0),
-        v3(1, -1, 1),
-        v3(1, -1, -1),
-        v3(-1, 1, 0),
-        v3(-1, 1, 1),
-        v3(-1, 1, -1),
-        v3(-1, -1, 0),
-        v3(-1, -1, 1),
-        v3(-1, -1, -1),
-      };
-
       for (int x = -1; x <= 1; ++x) {
         for (int y = -1; y <= 1; ++y) {
           for (int z = -1; z <= 1; ++z) {
@@ -488,8 +483,8 @@ class VoxelChunk {
             if (V.blocksView())
               continue;
 
-            if (!V.markedAsLighted()) {
-              V.markAsLighted(true);
+            if (!V.marked()) {
+              V.mark(true);
               ToHandleNext->push_back(iterPos);
             }
           }
@@ -522,11 +517,92 @@ class VoxelChunk {
 
   std::unordered_set<v3> lights;
 
+  float spaceRecalcTimer = 10;
+  float timeSinceLastSpaceRecalc = 9;
+
+  void spreadSpace(v3 startPos) {
+    std::stack<v3, std::vector<v3>> ToHandle;
+    ToHandle.push(startPos);
+
+    while (!ToHandle.empty()) {
+
+      if (ToHandle.size() > (128 * 128 * 128)) {
+        std::cout << "TOO big" << std::endl;
+        return;
+      }
+
+      v3 pos = ToHandle.top();
+      ToHandle.pop();
+
+      Voxel& C = get(pos);
+
+      C.transform(Voxel::SPACE);
+
+      static const std::array<v3, 6> Offsets = {
+        v3(0, 0, 1),
+        v3(0, 0, -1),
+        v3(0, 1, 0),
+        v3(0, -1, 0),
+        v3(1, 0, 0),
+        v3(-1, 0, 0),
+      };
+
+      for (int i = 0; i < Offsets.size(); ++i) {
+        v3 o = Offsets[i];
+        v3 iterPos(pos.x + o.x, pos.y + o.y, pos.z + o.z);
+
+        if (iterPos.x < 0 || iterPos.x >= size.x)
+          continue;
+        if (iterPos.y < 0 || iterPos.y >= size.y)
+          continue;
+        if (iterPos.z < 0 || iterPos.z >= size.z)
+          continue;
+
+        Voxel& V = get(iterPos);
+        if (!V.is(Voxel::AIR))
+          continue;
+
+        if (V.marked())
+          continue;
+
+        V.mark(true);
+
+        ToHandle.push(iterPos);
+      }
+    }
+  }
+
+  void recalcSpace() {
+    //return; // TODO
+    for (int64_t x = offset.x; x < size.x + offset.x; ++x) {
+      for (int64_t y = offset.y; y < size.y + offset.y; ++y) {
+        for (int64_t z = offset.z; z < size.z + offset.z; ++z) {
+          Voxel &V = get({x, y, z});
+          if (V.is(Voxel::SPACE)) {
+            V.transform(Voxel::AIR);
+          }
+          V.mark(false);
+        }
+      }
+    }
+    spreadSpace({0, 0, 0});
+    assert(get({0, 0, 0}).is(Voxel::SPACE));
+  }
+
+
 public:
   VoxelChunk(v3 offset) : offset(offset), engine(11), distPercent(0, 1) {
     size = {128, 128, 128};
     Voxels.resize(size.x * size.y * size.z, Voxel::SPACE);
     generateSpaceShip();
+  }
+
+  void update(float deltaTime) {
+    timeSinceLastSpaceRecalc += deltaTime;
+    if (timeSinceLastSpaceRecalc >= spaceRecalcTimer) {
+      timeSinceLastSpaceRecalc -= spaceRecalcTimer;
+      recalcSpace();
+    }
   }
 
   void addLight(v3 pos) {
