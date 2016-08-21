@@ -139,7 +139,8 @@ public:
     METAL_CEILING,
     LAMP,
     GENERATOR,
-    CRATE
+    CRATE,
+    GLASS
   };
   Voxel() {
     assert(isDark());
@@ -173,6 +174,17 @@ public:
 
   bool isDark() const {
     return Light <= LightMin;
+  }
+
+  bool blocksView() const {
+    switch(Type) {
+      case GLASS:
+      case SPACE:
+      case AIR:
+        return false;
+      default:
+        return true;
+    }
   }
 
   float lightPercent() const {
@@ -241,6 +253,8 @@ public:
         return std::make_pair(2 * TEX_SIZE, 0);
       case  METAL_CEILING:
         return std::make_pair(3 * TEX_SIZE, 0);
+      case  GLASS:
+        return std::make_pair(3 * TEX_SIZE, 1 * TEX_SIZE);
       case LAMP:
         return std::make_pair(4 * TEX_SIZE, 0);
 
@@ -404,24 +418,29 @@ class VoxelChunk {
     std::vector<v3> *ToHandle = &StorageA;
     std::vector<v3> *ToHandleNext = &StorageB;
 
+    const int64_t maxLightDistance = 8;
 
-    for (int64_t x = -8 + startPos.x; x <= 8 + startPos.x; ++x) {
-      for (int64_t y = -8 + startPos.y; y <= 8 + startPos.y; ++y) {
-        for (int64_t z = -8 + startPos.z; z <= 8 + startPos.z; ++z) {
+    for (int64_t x = -maxLightDistance + startPos.x; x <= maxLightDistance + startPos.x; ++x) {
+      for (int64_t y = -maxLightDistance + startPos.y; y <= maxLightDistance + startPos.y; ++y) {
+        for (int64_t z = -maxLightDistance + startPos.z; z <= maxLightDistance + startPos.z; ++z) {
           get({x, y, z}).markAsLighted(false);
         }
       }
     }
 
-    const static float fallingFactor = 0.50f;
+    const static float fallingFactor = 0.40f;
 
+    int Distance = 0;
     while (true) {
+
       if (ToHandle->empty()) {
+        ++Distance;
         if (ToHandleNext->empty())
           break;
         if ((light * fallingFactor) <= Voxel::LightMin)
           break;
-        light *= fallingFactor;
+        if (Distance > 4)
+          light *= fallingFactor;
         std::swap(ToHandle, ToHandleNext);
       }
       v3 pos = ToHandle->back();
@@ -466,7 +485,7 @@ class VoxelChunk {
               continue;
 
             Voxel& V = get(iterPos);
-            if (!V.isFree())
+            if (V.blocksView())
               continue;
 
             if (!V.markedAsLighted()) {
@@ -480,24 +499,22 @@ class VoxelChunk {
   }
 
   void generateSpaceShip() {
-    for (int64_t x = 1; x < getSize() - 1; ++x) {
-      for (int64_t z = 1; z < getSize() - 1; ++z) {
+    for (int64_t x = 50; x <= 60; ++x) {
+      for (int64_t z = 50; z <= 60; ++z) {
         get({x, 11, z}) = Voxel::STEEL_FLOOR;
         get({x, 15, z}) = Voxel::METAL_CEILING;
 
-        if (x % 9 == 0 || z % 9 == 0) {
-          if (x % 9 != 4 && x % 9 != 5) {
-            get({x, 14, z}) = Voxel::METAL_WALL;
-            get({x, 13, z}) = Voxel::METAL_WALL;
-            get({x, 12, z}) = Voxel::METAL_WALL;
-          }
-        }
-        if (x % 16 == 4 && z % 16 == 4) {
-          get({x, 15, z}) = Voxel::LAMP;
-          lights.insert({x, 15, z});
+        if (x % 10 == 0 || z % 10 == 0) {
+          get({x, 14, z}) = Voxel::METAL_WALL;
+          get({x, 13, z}) = Voxel::GLASS;
+          get({x, 12, z}) = Voxel::METAL_WALL;
         }
       }
     }
+
+    get({55, 15, 55}) = Voxel::LAMP;
+    lights.insert({55, 15, 55});
+
     relight();
   }
 
@@ -508,7 +525,7 @@ class VoxelChunk {
 public:
   VoxelChunk(v3 offset) : offset(offset), engine(11), distPercent(0, 1) {
     size = {128, 128, 128};
-    Voxels.resize(size.x * size.y * size.z);
+    Voxels.resize(size.x * size.y * size.z, Voxel::SPACE);
     generateSpaceShip();
   }
 
@@ -523,13 +540,17 @@ public:
     spreadLight(newPos, true);
   }
 
-  void setBlock(v3 pos, Voxel v) {
+  void setBlock(v3 pos, Voxel newV) {
     for (auto &light : lights) {
       if (light.distance(pos) < 8) {
         spreadLight(light, false);
       }
     }
-    get(pos) = v;
+
+    Voxel& V = get(pos);
+    V = newV;
+
+
     for (auto &light : lights) {
       if (light.distance(pos) < 8) {
         spreadLight(light, true);
@@ -606,7 +627,7 @@ protected:
   float rot = 0;
 
 public:
-  Entity() : pos(4, 14, 40) {
+  Entity() : pos(55, 14, 55) {
 
   }
 

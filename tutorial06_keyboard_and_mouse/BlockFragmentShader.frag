@@ -14,7 +14,12 @@ uniform sampler2D myTextureSampler;
 
 void main(){
 
-	// Output color = color of the texture at the specified UV
-	color.rgb = texture(myTextureSampler, vec2(UV.x, -UV.y)).rgb * OS * light;
-	color.a = 1;
+    vec3 texColor = texture(myTextureSampler, vec2(UV.x, -UV.y)).rgb;
+    if (texColor.r >= 0.99f && texColor.g <= 0.01f && texColor.b >= 0.99f) {
+	  discard;
+    } else {
+	  // Output color = color of the texture at the specified UV
+	  color.rgb = texture(myTextureSampler, vec2(UV.x, -UV.y)).rgb * OS * light;
+	  color.a = 1;
+    }
 }
