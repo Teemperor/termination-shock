@@ -1,6 +1,10 @@
 #ifndef TUTORIALS_RENDERWINDOW_H
 #define TUTORIALS_RENDERWINDOW_H
 
+
+// fixed MINGW error http://stackoverflow.com/questions/5259714/undefined-reference-to-winmain16
+#define SDL_MAIN_HANDLED
+
 #include <GL/glew.h>
 #include <SDL2/SDL.h>
 //#include <SDL2/SDL_opengl.h>

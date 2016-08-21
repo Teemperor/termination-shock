@@ -2,8 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <noise/noise.h>
-
 
 #include "RenderWindow.h"
 
@@ -724,7 +722,7 @@ public:
   }
 };
 
-int main(void) {
+int main(int argc, char** argv) {
 
   Camera camera;
   Controls controls;

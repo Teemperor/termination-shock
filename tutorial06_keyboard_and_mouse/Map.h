@@ -8,7 +8,6 @@
 #include <utility>
 #include <algorithm>
 #include <vector>
-#include <noise/module/perlin.h>
 #include <random>
 #include <iostream>
 #include <stack>
@@ -325,7 +324,7 @@ class VoxelChunk {
   }
 
   void generate() {
-    noise::module::Perlin myModule;
+    /*noise::module::Perlin myModule;
 
     for (int64_t x = offset.x; x < size.x + offset.x; ++x) {
       const double factor = 100.0;
@@ -370,6 +369,7 @@ class VoxelChunk {
         }
       }
     }
+     */
   }
 
   void createLight() {
