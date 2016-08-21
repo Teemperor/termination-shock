@@ -496,9 +496,9 @@ class VoxelMapRenderer {
   static constexpr float ONE_THIRD = 1.0f / 3.0f;
 
 #define LIGHT_SUM(ax, ay, az, bx, by, bz, cx, cy, cz) \
-   (Map->get({pos.x + ax, pos.y + ay, pos.z + az}).isFree() ? ONE_THIRD : 0.1f) \
- + (Map->get({pos.x + bx, pos.y + by, pos.z + bz}).isFree() ? ONE_THIRD : 0.1f) \
- + (Map->get({pos.x + cx, pos.y + cy, pos.z + cz}).isFree() ? ONE_THIRD : 0.1f);
+   (Map->get({pos.x + ax, pos.y + ay, pos.z + az}).transparent() ? ONE_THIRD : 0.1f) \
+ + (Map->get({pos.x + bx, pos.y + by, pos.z + bz}).transparent() ? ONE_THIRD : 0.1f) \
+ + (Map->get({pos.x + cx, pos.y + cy, pos.z + cz}).transparent() ? ONE_THIRD : 0.1f);
 
   std::array<GLfloat, 6> getOcclusionLighting(const v3& pos, unsigned side) {
     std::array<GLfloat, 6> Result = {1, 1, 1, 1, 1, 1};
@@ -621,7 +621,7 @@ public:
       for (int64_t y = offset.y; y < size.y + offset.y; ++y) {
         for (int64_t z = offset.z; z < size.z + offset.z; ++z) {
           AnnotatedVoxel V = Map->getAnnotated(v3(x, y, z));
-          if (V.V.isFree())
+          if (V.V.transparent())
             continue;
           const float us = Voxel::TEX_SIZE;
           const float vs = us;
@@ -790,7 +790,8 @@ int main(int argc, char** argv) {
     Voxel::CRATE,
     Voxel::STEEL_FLOOR,
     Voxel::STEEL_WALL,
-    Voxel::GENERATOR
+    Voxel::GENERATOR,
+    Voxel::AIRLOCK
   };
   Voxel::Types SelectedType = BlockTypes[0];
 
@@ -855,7 +856,7 @@ int main(int argc, char** argv) {
 
     Chunk.update(deltaTime);
 
-    std::cout << "Current V( " << Player.position().toVoxelPos() << "): " << Chunk.get(Player.position().toVoxelPos()).getName() << std::endl;
+    //std::cout << "Current V( " << Player.position().toVoxelPos() << "): " << Chunk.get(Player.position().toVoxelPos()).getName() << std::endl;
 
     if (controls.getBlockType() < BlockTypes.size())
       SelectedType = BlockTypes[controls.getBlockType()];

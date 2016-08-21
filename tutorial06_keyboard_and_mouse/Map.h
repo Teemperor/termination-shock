@@ -143,7 +143,9 @@ public:
     LAMP,
     GENERATOR,
     CRATE,
-    GLASS
+    GLASS,
+    AIRLOCK
+
   };
   Voxel() {
     assert(isDark());
@@ -183,11 +185,16 @@ public:
     Type = T;
   }
 
+  bool transparent() const {
+    return Type == SPACE || Type == AIR;
+  }
+
   bool blocksView() const {
     switch(Type) {
       case GLASS:
       case SPACE:
       case AIR:
+      case AIRLOCK:
         return false;
       default:
         return true;
@@ -207,7 +214,7 @@ public:
   }
 
   bool isFree() const {
-    return Type == AIR || Type == SPACE;
+    return Type == AIR || Type == SPACE|| Type == AIRLOCK;
   }
 
 #define VOXEL_NAME_MACRO(ENUM) case ENUM : return #ENUM
@@ -273,6 +280,8 @@ public:
       case  GLASS:
         return std::make_pair(3 * TEX_SIZE, 1 * TEX_SIZE);
       case LAMP:
+        return std::make_pair(4 * TEX_SIZE, 0);
+      case AIRLOCK:
         return std::make_pair(4 * TEX_SIZE, 0);
 
       default: assert(false);
@@ -521,8 +530,8 @@ class VoxelChunk {
   float timeSinceLastSpaceRecalc = 9;
 
   void spreadSpace(v3 startPos) {
-    std::stack<v3, std::vector<v3>> ToHandle;
-    ToHandle.push(startPos);
+    std::vector<v3> ToHandle = {startPos};
+    ToHandle.reserve(size.x * size.y * size.z);
 
     while (!ToHandle.empty()) {
 
@@ -531,8 +540,8 @@ class VoxelChunk {
         return;
       }
 
-      v3 pos = ToHandle.top();
-      ToHandle.pop();
+      v3 pos = ToHandle.back();
+      ToHandle.pop_back();
 
       Voxel& C = get(pos);
 
@@ -567,7 +576,7 @@ class VoxelChunk {
 
         V.mark(true);
 
-        ToHandle.push(iterPos);
+        ToHandle.push_back(iterPos);
       }
     }
   }
