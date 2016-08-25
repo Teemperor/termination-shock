@@ -856,7 +856,7 @@ int main(int argc, char** argv) {
 
     Chunk.update(deltaTime);
 
-    //std::cout << "Current V( " << Player.position().toVoxelPos() << "): " << Chunk.get(Player.position().toVoxelPos()).getName() << std::endl;
+    std::cout << "Current V( " << Player.position().toVoxelPos() << "): " << Chunk.get(Player.position().toVoxelPos()).getName() << std::endl;
 
     if (controls.getBlockType() < BlockTypes.size())
       SelectedType = BlockTypes[controls.getBlockType()];

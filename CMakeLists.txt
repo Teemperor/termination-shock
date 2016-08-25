@@ -34,24 +34,25 @@ add_definitions(
 	-D_CRT_SECURE_NO_WARNINGS
 )
 
-add_executable(tutorial06_keyboard_and_mouse
-	tutorial06_keyboard_and_mouse/tutorial06.cpp
+add_executable(termination_shock
+	game/main.cpp
 	common/shader.cpp
 	common/shader.hpp
 	common/texture.cpp
 	common/texture.hpp
 
-	tutorial06_keyboard_and_mouse/Map.cpp
-	tutorial06_keyboard_and_mouse/Map.h
-	tutorial06_keyboard_and_mouse/RenderWindow.cpp
-	tutorial06_keyboard_and_mouse/RenderWindow.h
-	tutorial06_keyboard_and_mouse/Camera.cpp
-	tutorial06_keyboard_and_mouse/Camera.h
-	tutorial06_keyboard_and_mouse/Controls.cpp
-	tutorial06_keyboard_and_mouse/Controls.h
-		common/Common.h)
+	game/Map.cpp
+	game/Map.h
+	game/RenderWindow.cpp
+	game/RenderWindow.h
+	game/Camera.cpp
+	game/Camera.h
+	game/Controls.cpp
+	game/Controls.h
+	common/Common.h
+)
 
-target_link_libraries(tutorial06_keyboard_and_mouse
+target_link_libraries(termination_shock
 	${ALL_LIBS}
 )
 
