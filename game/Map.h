@@ -16,286 +16,8 @@
 #include <GL/glew.h>
 #include <unordered_set>
 #include <math.h>
+#include "Voxel.h"
 
-
-struct v3 {
-  int64_t x, y, z;
-
-  v3() {
-  }
-
-  v3(int64_t x, int64_t y, int64_t z) : x(x), y(y), z(z) {}
-
-  bool operator!=(const v3 &Other) const {
-    return std::tie(x, y, z) != std::tie(Other.x, Other.y, Other.z);
-  }
-  bool operator==(const v3 &Other) const {
-    return std::tie(x, y, z) == std::tie(Other.x, Other.y, Other.z);
-  }
-
-  bool operator<(const v3 &Other) const {
-    return std::tie(x, y, z) < std::tie(Other.x, Other.y, Other.z);
-  }
-
-  v3 operator*(const int64_t Scale) const {
-    v3 result = *this;
-    result *= Scale;
-    return result;
-  }
-
-  v3 operator+(const v3&Other) const {
-    v3 result = *this;
-    result += Other;
-    return result;
-  }
-
-  v3 operator-(const v3&Other) const {
-    v3 result = *this;
-    result -= Other;
-    return result;
-  }
-
-  v3& operator-=(const v3&Other) {
-    x -= Other.x;
-    y -= Other.y;
-    z -= Other.z;
-    return *this;
-  }
-
-  v3& operator+=(const v3&Other) {
-    x += Other.x;
-    y += Other.y;
-    z += Other.z;
-    return *this;
-  }
-
-  v3& operator*=(const int64_t Scale) {
-    x *= Scale;
-    y *= Scale;
-    z *= Scale;
-    return *this;
-  }
-
-
-  double length() const {
-    return std::sqrt(x * x + y * y + z * z);
-  }
-
-  double distance(const v3&other) const {
-    v3 diff = other - *this;
-    return diff.length();
-  }
-
-  friend std::ostream &operator<<(std::ostream &os, v3 const &v) {
-    return os << v.x << ", " << v.y << ", " << v.z;
-  }
-};
-
-
-namespace std {
-  template <> struct hash<v3>
-  {
-    size_t operator()(const v3 & v) const
-    {
-      return (size_t) (v.x ^ v.y ^ v.z);
-    }
-  };
-}
-
-struct v3f {
-  float x, y, z;
-
-  v3f() {
-
-  }
-  v3f(float x, float y, float z) : x(x), y(y), z(z) {
-  }
-
-  v3 toVoxelPos() {
-    return {(int64_t) x, (int64_t) y, (int64_t) z};
-  }
-};
-
-
-class Voxel {
-  uint16_t Light = 10;
-  uint8_t Type = 0;
-  unsigned Marked : 1;
-
-public:
-
-  static constexpr uint8_t LightMin = 10;
-  static constexpr float TEX_SIZE = 1.0f / 16;
-
-  enum Types {
-    SPACE,
-    
-    AIR,
-    GRASS,
-    STONE,
-    EARTH,
-    BEDROCK,
-    TREE,
-    LEAF,
-
-    STEEL_WALL,
-    STEEL_FLOOR,
-    METAL_WALL,
-    METAL_CEILING,
-    LAMP,
-    GENERATOR,
-    CRATE,
-    GLASS,
-    AIRLOCK
-
-  };
-  Voxel() {
-    assert(isDark());
-    assert(isFree());
-  }
-  Voxel(Types t) : Type(t) {
-    assert(isDark());
-  }
-
-  void setLight(uint8_t L) {
-    if (L < LightMin)
-      return;
-    Light = L;
-  }
-
-  void mark(bool L) {
-    Marked = L ? 1 : 0;
-  }
-
-  bool marked() const {
-    return Marked != 0;
-  }
-
-  void increaseLight(uint16_t addLight) {
-    Light += addLight;
-  }
-
-  void decreaseLight(uint16_t addLight) {
-    Light -= addLight;
-  }
-
-  bool isDark() const {
-    return Light <= LightMin;
-  }
-
-  void transform(Types T) {
-    Type = T;
-  }
-
-  bool transparent() const {
-    return Type == SPACE || Type == AIR;
-  }
-
-  bool blocksView() const {
-    switch(Type) {
-      case GLASS:
-      case SPACE:
-      case AIR:
-      case AIRLOCK:
-        return false;
-      default:
-        return true;
-    }
-  }
-
-  float lightPercent() const {
-    return ((float) light()) / std::numeric_limits<uint8_t>::max();
-  }
-
-  uint8_t light() const {
-    return (uint8_t) std::min<uint16_t>(std::numeric_limits<uint8_t>::max(), Light);
-  }
-
-  bool is(Types T) const {
-    return Type == T;
-  }
-
-  bool isBuildable() const {
-    return Type != AIR && Type != SPACE;
-  }
-
-  bool isFree() const {
-    return Type == AIR || Type == SPACE|| Type == AIRLOCK;
-  }
-
-#define VOXEL_NAME_MACRO(ENUM) case ENUM : return #ENUM
-
-  const char *getName() const {
-    switch(Type) {
-      VOXEL_NAME_MACRO(SPACE);
-      VOXEL_NAME_MACRO(AIR);
-      default: return "Unknown voxel";
-    }
-  }
-
-  std::pair<float, float> getUVOffset(unsigned side, bool airAbove) const {
-    assert(Type != AIR);
-    switch (Type) {
-      case GRASS:
-        switch (side) {
-          case 0:
-            return std::make_pair(0, 0);
-          case 1:
-            return std::make_pair(2 * TEX_SIZE, 0);
-          default:
-            if (airAbove)
-              return std::make_pair(3 * TEX_SIZE, 0);
-            return std::make_pair(2 * TEX_SIZE, 0);
-        }
-      case STONE:
-        return std::make_pair(1 * TEX_SIZE, 0);
-      case TREE:
-        switch (side) {
-          case 0:
-          case 1:
-            return std::make_pair(5 * TEX_SIZE, 1 * TEX_SIZE);
-          default:
-            return std::make_pair(4 * TEX_SIZE, 1 * TEX_SIZE);
-        }
-      case LEAF:
-        return std::make_pair(5 * TEX_SIZE, 3 * TEX_SIZE);
-      case BEDROCK:
-        return std::make_pair(1 * TEX_SIZE, 1 * TEX_SIZE);
-      case EARTH:
-        return std::make_pair(2 * TEX_SIZE, 0);
-
-
-      case CRATE:
-        switch (side) {
-          case 0:
-          case 1:
-            return std::make_pair(1 * TEX_SIZE, 1 * TEX_SIZE);
-          default:
-            return std::make_pair(2 * TEX_SIZE, 1 * TEX_SIZE);
-        }
-      case STEEL_WALL:
-        return std::make_pair(0 * TEX_SIZE, 0);
-      case GENERATOR:
-        return std::make_pair(0, 1  * TEX_SIZE);
-      case  STEEL_FLOOR:
-        return std::make_pair(1 * TEX_SIZE, 0);
-      case  METAL_WALL:
-        return std::make_pair(2 * TEX_SIZE, 0);
-      case  METAL_CEILING:
-        return std::make_pair(3 * TEX_SIZE, 0);
-      case  GLASS:
-        return std::make_pair(3 * TEX_SIZE, 1 * TEX_SIZE);
-      case LAMP:
-        return std::make_pair(4 * TEX_SIZE, 0);
-      case AIRLOCK:
-        return std::make_pair(4 * TEX_SIZE, 0);
-
-      default: assert(false);
-        return std::make_pair(0, 0);
-    }
-  };
-
-};
 
 struct AnnotatedVoxel {
   Voxel V;
@@ -318,7 +40,7 @@ struct AnnotatedVoxel {
 class VoxelChunk {
 
   v3 offset;
-  v3 size = v3(getSize(), getSize(), getSize());
+  v3 size;
   std::vector<Voxel> Voxels;
 
   std::default_random_engine engine;
@@ -491,8 +213,16 @@ class VoxelChunk {
           for (int z = -1; z <= 1; ++z) {
             v3 iterPos(pos.x + x, pos.y + y, pos.z + z);
 
-            if (x == 0 && z == 0 && y == 0)
+            if (x == 0 && y == 0 && z == 0)
               continue;
+
+            v3 relPos = iterPos - offset;
+            if (relPos.x < 0 || relPos.y < 0 || relPos.z < 0) {
+              continue;
+            }
+            if (relPos.x >= size.x || relPos.y >= size.y || relPos.z >= size.z) {
+              continue;
+            }
 
             Voxel& V = get(iterPos);
             if (V.blocksView())
@@ -501,6 +231,8 @@ class VoxelChunk {
             if (!V.marked()) {
               V.mark(true);
               ToHandleNext->push_back(iterPos);
+              if (ToHandle->size() > 2000)
+                return;
             }
           }
         }
@@ -508,29 +240,6 @@ class VoxelChunk {
     }
   }
 
-  void generateSpaceShip() {
-    for (int64_t x = 50; x <= 60; ++x) {
-      for (int64_t z = 50; z <= 60; ++z) {
-        get({x, 11, z}) = Voxel::STEEL_FLOOR;
-        get({x, 19, z}) = Voxel::METAL_CEILING;
-
-        if (x % 10 == 0 || z % 10 == 0) {
-          get({x, 18, z}) = Voxel::METAL_WALL;
-          get({x, 17, z}) = Voxel::METAL_WALL;
-          get({x, 16, z}) = Voxel::METAL_WALL;
-          get({x, 15, z}) = Voxel::METAL_WALL;
-          get({x, 14, z}) = Voxel::METAL_WALL;
-          get({x, 13, z}) = Voxel::GLASS;
-          get({x, 12, z}) = Voxel::METAL_WALL;
-        }
-      }
-    }
-
-    get({55, 15, 55}) = Voxel::LAMP;
-    lights.insert({55, 15, 55});
-
-    relight();
-  }
 
   Voxel Default;
 
@@ -613,7 +322,42 @@ public:
   VoxelChunk(v3 offset) : offset(offset), engine(11), distPercent(0, 1) {
     size = {128, 128, 128};
     Voxels.resize(size.x * size.y * size.z, Voxel::SPACE);
-    generateSpaceShip();
+  }
+
+  void generateSpaceShip() {
+    for (int64_t x = offset.x + 50; x <= offset.x + 60; ++x) {
+      for (int64_t z = offset.z +50; z <= offset.z + 60; ++z) {
+        get({x, offset.y + 11, z}) = Voxel::STEEL_FLOOR;
+        get({x, offset.y + 19, z}) = Voxel::METAL_CEILING;
+
+        if (x % 10 == 0 || z % 10 == 0) {
+          get({x, offset.y + 18, z}) = Voxel::METAL_WALL;
+          get({x, offset.y + 17, z}) = Voxel::METAL_WALL;
+          get({x, offset.y + 16, z}) = Voxel::METAL_WALL;
+          get({x, offset.y + 15, z}) = Voxel::METAL_WALL;
+          get({x, offset.y + 14, z}) = Voxel::METAL_WALL;
+          get({x, offset.y + 13, z}) = Voxel::GLASS;
+          get({x, offset.y + 12, z}) = Voxel::METAL_WALL;
+        }
+      }
+    }
+
+    get(v3(55, 15, 55) + offset) = Voxel::LAMP;
+    lights.insert(v3(55, 15, 55) + offset);
+
+    relight();
+  }
+
+  void generateMeteor() {
+    for (int64_t x = offset.x + 2; x <= offset.x + size.x - 2; ++x) {
+      for (int64_t y = offset.y + 2; y <= offset.y + size.y - 2; ++y) {
+        for (int64_t z = offset.z + 2; z <= offset.y + size.z - 2; ++z) {
+          get({x, y, z}) = Voxel::STONE;
+        }
+      }
+    }
+
+    relight();
   }
 
   void update(float deltaTime) {
@@ -635,6 +379,10 @@ public:
     spreadLight(newPos, true);
   }
 
+  void removeLight(v3 pos) {
+    lights.erase(pos);
+  }
+
   void setBlock(v3 pos, Voxel newV) {
     for (auto &light : lights) {
       if (light.distance(pos) < 8) {
@@ -643,7 +391,9 @@ public:
     }
 
     Voxel& V = get(pos);
+    V.callback(false, pos, *this);
     V = newV;
+    V.callback(true, pos, *this);
 
 
     for (auto &light : lights) {
@@ -658,6 +408,11 @@ public:
       spreadLight(light, true);
     }
   }
+
+  const v3& getSize() const {
+    return size;
+  }
+
 
   Voxel& get(v3 pos) {
     pos -= offset;
@@ -688,21 +443,12 @@ public:
     return Result;
   }
 
-  static size_t getSize() {
-    return 64;
+  bool contains(v3 pos) {
+    return pos > offset && pos < offset + size;
   }
 
   const v3& getOffset() const {
     return offset;
-  }
-
-  bool isGravityAffected(v3 pos) {
-    for (int i = 0; i < 10; ++i) {
-      if (get(pos).is(Voxel::STEEL_FLOOR))
-        return true;
-      pos.y--;
-    }
-    return false;
   }
 };
 
@@ -747,22 +493,67 @@ public:
   }
 };
 
+
+class Space {
+
+  std::vector<VoxelChunk*> Chunks;
+
+  Voxel defaultVoxel;
+
+public:
+  Space() {
+  }
+
+  void add(VoxelChunk &NewChunk) {
+    Chunks.push_back(&NewChunk);
+  }
+
+  VoxelChunk* getChunk(const v3 &pos) {
+    for (auto Chunk : Chunks) {
+      if (Chunk->contains(pos)) {
+        return Chunk;
+      }
+    }
+    return nullptr;
+  }
+
+  Voxel& get(const v3& pos) {
+    if (auto Chunk = getChunk(pos)) {
+      return Chunk->get(pos);
+    }
+
+    defaultVoxel = Voxel();
+    return defaultVoxel;
+  }
+
+  bool isGravityAffected(v3 pos) {
+    for (int i = 0; i < 10; ++i) {
+      Voxel &V = get(pos);
+      if (V.is(Voxel::STEEL_FLOOR))
+        return true;
+      pos.y--;
+    }
+    return false;
+  }
+};
+
+
 class MovingEntity : public Entity {
-  VoxelChunk *Chunk;
+  Space *space;
 
   v3f vel;
 
   bool isHeightGood(float h) {
     static const float r = 0.3f;
-  return
-      Chunk->get(v3f(pos.x + r, pos.y + h, pos.z - r).toVoxelPos()).isFree() &&
-      Chunk->get(v3f(pos.x - r, pos.y + h, pos.z - r).toVoxelPos()).isFree() &&
-      Chunk->get(v3f(pos.x + r, pos.y + h, pos.z + r).toVoxelPos()).isFree() &&
-      Chunk->get(v3f(pos.x - r, pos.y + h, pos.z + r).toVoxelPos()).isFree();
+    return
+      space->get(v3f(pos.x + r, pos.y + h, pos.z - r).toVoxelPos()).isFree() &&
+      space->get(v3f(pos.x - r, pos.y + h, pos.z - r).toVoxelPos()).isFree() &&
+      space->get(v3f(pos.x + r, pos.y + h, pos.z + r).toVoxelPos()).isFree() &&
+      space->get(v3f(pos.x - r, pos.y + h, pos.z + r).toVoxelPos()).isFree();
   }
 
   bool gravityAffected() const {
-    return Chunk->isGravityAffected(v3f(pos.x, pos.y - 2.0f, pos.z).toVoxelPos());
+    return space->isGravityAffected(v3f(pos.x, pos.y - 2.0f, pos.z).toVoxelPos());
   }
 
   bool isPosGood() {
@@ -780,7 +571,7 @@ class MovingEntity : public Entity {
   }
 
 public:
-  MovingEntity(VoxelChunk *Chunk) : Chunk(Chunk), vel(0, 0, 0) {
+  MovingEntity(Space *space) : space(space), vel(0, 0, 0) {
     vel.y = -0.4f;
   }
 
@@ -794,7 +585,7 @@ public:
 
     float runSpeedMod = 1;
     if (!gravityAffected())
-      runSpeedMod = 0.5f;
+      runSpeedMod = 2.5f;
 
     vel.x = std::sin(moveRot) * dz * speed * runSpeedMod;
     vel.x -= std::cos(moveRot) * dx * speed * runSpeedMod;
@@ -829,16 +620,5 @@ public:
 
 };
 
-class VoxelMap {
-public:
-
-};
-
-class VoxelRaycast {
-public:
-  VoxelRaycast(const v3f& start, const v3f& direction) {
-
-  }
-};
 
 #endif //TUTORIALS_MAP_H

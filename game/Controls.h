@@ -60,6 +60,8 @@ public:
         case SDL_SCANCODE_LSHIFT:
           down = event.type == SDL_KEYDOWN;
           break;
+        default:
+          break;
       }
     }
     if (event.type == SDL_KEYDOWN) {

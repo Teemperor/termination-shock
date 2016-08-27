@@ -677,18 +677,20 @@ public:
 class VoxelRenderMap {
 
   std::vector<VoxelMapRenderer *> Renders;
+  VoxelChunk *Chunk;
 
 public:
-  VoxelRenderMap(VoxelChunk& Chunk) {
+  VoxelRenderMap(VoxelChunk& Chunk) : Chunk(&Chunk) {
     const size_t renderSize = VoxelMapRenderer::getSize();
-    for (int64_t x = 0; x < Chunk.getSize(); x += renderSize)
-      for (int64_t y = 0; y < Chunk.getSize(); y += renderSize)
-        for (int64_t z = 0; z < Chunk.getSize(); z += renderSize)
+    for (int64_t x = Chunk.getOffset().x; x < Chunk.getOffset().x + Chunk.getSize().x; x += renderSize)
+      for (int64_t y = Chunk.getOffset().y; y < Chunk.getOffset().y + Chunk.getSize().y; y += renderSize)
+        for (int64_t z = Chunk.getOffset().z; z < Chunk.getOffset().z + Chunk.getSize().z; z += renderSize)
           Renders.push_back(new VoxelMapRenderer(Chunk, v3(x, y, z)));
   }
 
   VoxelMapRenderer *get(v3 pos) {
-    size_t rs = VoxelChunk::getSize() / VoxelMapRenderer::getSize();
+    pos -= Chunk->getOffset();
+    size_t rs = Chunk->getSize().x / VoxelMapRenderer::getSize();
 
     size_t index = (pos.x / VoxelMapRenderer::getSize()) * rs * rs + (pos.y / VoxelMapRenderer::getSize()) * rs + (pos.z / VoxelMapRenderer::getSize());
     if (index < Renders.size())
@@ -712,8 +714,9 @@ public:
         for (int z = -1; z <= 1; ++z)
           if (auto R = get(v3(pos.x + x * VoxelMapRenderer::getSize(),
                            pos.y + y * VoxelMapRenderer::getSize(),
-                           pos.z + z * VoxelMapRenderer::getSize())))
+                           pos.z + z * VoxelMapRenderer::getSize()))) {
             R->recreate();
+          }
   }
 
   void draw() {
@@ -777,19 +780,28 @@ int main(int argc, char** argv) {
   //}
 
   VoxelChunk Chunk({0, 0, 0});
+  Chunk.generateSpaceShip();
+
+  VoxelChunk Chunk2({160, 0, 0});
+  Chunk2.generateMeteor();
 
   VoxelRenderMap Renderer(Chunk);
+  VoxelRenderMap Renderer2(Chunk2);
 
   DeepSpaceRenderer DeepSpace;
 
   MovingLight CameraLight(&Chunk);
 
-  MovingEntity Player(&Chunk);
+  Space space;
+  space.add(Chunk);
+  space.add(Chunk2);
+
+  MovingEntity Player(&space);
 
   std::vector<Voxel::Types> BlockTypes = {
     Voxel::CRATE,
     Voxel::STEEL_FLOOR,
-    Voxel::STEEL_WALL,
+    Voxel::LAMP,
     Voxel::GENERATOR,
     Voxel::AIRLOCK
   };
@@ -823,6 +835,7 @@ int main(int argc, char** argv) {
     glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
     Renderer.draw();
+    Renderer2.draw();
 
     // Use our shader
     glUseProgram(SpaceProgramID);
@@ -856,7 +869,7 @@ int main(int argc, char** argv) {
 
     Chunk.update(deltaTime);
 
-    //std::cout << "Current V( " << Player.position().toVoxelPos() << "): " << Chunk.get(Player.position().toVoxelPos()).getName() << std::endl;
+    // std::cout << "Current V( " << Player.position().toVoxelPos() << "): " << Chunk.get(Player.position().toVoxelPos()).getName() << std::endl;
 
     if (controls.getBlockType() < BlockTypes.size())
       SelectedType = BlockTypes[controls.getBlockType()];
@@ -878,12 +891,13 @@ int main(int argc, char** argv) {
         v3 cameraVoxel((int64_t) cameraPos.x, (int64_t) cameraPos.y,
                        (int64_t) cameraPos.z);
 
-        if (!Chunk.get(cameraVoxel).isBuildable())
+        if (!space.get(cameraVoxel).isBuildable())
           continue;
 
-        Chunk.setBlock(cameraVoxel, Voxel::AIR);
+        space.getChunk(cameraVoxel)->setBlock(cameraVoxel, Voxel::AIR);
 
         Renderer.recreateSurrounding(cameraVoxel);
+        Renderer2.recreateSurrounding(cameraVoxel);
         break;
       }
     }
@@ -896,7 +910,7 @@ int main(int argc, char** argv) {
         v3 cameraVoxel((int64_t) testPos.x, (int64_t) testPos.y,
                        (int64_t) testPos.z);
 
-        if (!Chunk.get(cameraVoxel).isBuildable()) {
+        if (!space.get(cameraVoxel).isBuildable()) {
           lastFreePos = testPos;
           continue;
         }
@@ -904,9 +918,12 @@ int main(int argc, char** argv) {
         if (lastFreePos != camera.getPosition()) {
           v3 lastFreeVoxel((int64_t) lastFreePos.x, (int64_t) lastFreePos.y,
                          (int64_t) lastFreePos.z);
-          Chunk.setBlock(lastFreeVoxel, SelectedType);
+          if (auto C = space.getChunk(lastFreeVoxel)) {
+            C->setBlock(lastFreeVoxel, SelectedType);
+            Renderer.recreateSurrounding(lastFreeVoxel);
+            Renderer2.recreateSurrounding(lastFreeVoxel);
+          }
 
-          Renderer.recreateSurrounding(cameraVoxel);
         }
         break;
 

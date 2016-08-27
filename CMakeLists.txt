@@ -50,7 +50,7 @@ add_executable(termination_shock
 	game/Controls.cpp
 	game/Controls.h
 	common/Common.h
-)
+		game/Voxel.cpp game/Voxel.h game/v3.cpp game/v3.h)
 
 target_link_libraries(termination_shock
 	${ALL_LIBS}
