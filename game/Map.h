@@ -120,13 +120,16 @@ struct v3f {
 class Voxel {
   uint16_t Light = 10;
   uint8_t Type = 0;
-  uint8_t Lighted = 0;
+  unsigned Marked : 1;
+
 public:
 
   static constexpr uint8_t LightMin = 10;
   static constexpr float TEX_SIZE = 1.0f / 16;
 
   enum Types {
+    SPACE,
+    
     AIR,
     GRASS,
     STONE,
@@ -135,7 +138,6 @@ public:
     TREE,
     LEAF,
 
-    SPACE,
     STEEL_WALL,
     STEEL_FLOOR,
     METAL_WALL,
@@ -162,11 +164,11 @@ public:
   }
 
   void mark(bool L) {
-    Lighted = (uint8_t) (L ? 1 : 0);
+    Marked = L ? 1 : 0;
   }
 
   bool marked() const {
-    return Lighted;
+    return Marked != 0;
   }
 
   void increaseLight(uint16_t addLight) {
@@ -506,9 +508,13 @@ class VoxelChunk {
     for (int64_t x = 50; x <= 60; ++x) {
       for (int64_t z = 50; z <= 60; ++z) {
         get({x, 11, z}) = Voxel::STEEL_FLOOR;
-        get({x, 15, z}) = Voxel::METAL_CEILING;
+        get({x, 19, z}) = Voxel::METAL_CEILING;
 
         if (x % 10 == 0 || z % 10 == 0) {
+          get({x, 18, z}) = Voxel::METAL_WALL;
+          get({x, 17, z}) = Voxel::METAL_WALL;
+          get({x, 16, z}) = Voxel::METAL_WALL;
+          get({x, 15, z}) = Voxel::METAL_WALL;
           get({x, 14, z}) = Voxel::METAL_WALL;
           get({x, 13, z}) = Voxel::GLASS;
           get({x, 12, z}) = Voxel::METAL_WALL;
@@ -686,6 +692,14 @@ public:
     return offset;
   }
 
+  bool isGravityAffected(v3 pos) {
+    for (int i = 0; i < 7; ++i) {
+      if (get(pos).is(Voxel::STEEL_FLOOR))
+        return true;
+      pos.y--;
+    }
+    return false;
+  }
 };
 
 class MovingLight {
@@ -743,6 +757,10 @@ class MovingEntity : public Entity {
       Chunk->get(v3f(pos.x - r, pos.y + h, pos.z + r).toVoxelPos()).isFree();
   }
 
+  bool gravityAffected() const {
+    return Chunk->isGravityAffected(v3f(pos.x, pos.y, pos.z).toVoxelPos());
+  }
+
   bool isPosGood() {
     return isHeightGood(-2.0f) &&isHeightGood(-1.5f) && isHeightGood(-0.7f) && isHeightGood(0) && isHeightGood(0.3f);
   }
@@ -762,29 +780,41 @@ public:
     vel.y = -0.4f;
   }
 
-  void setMove(float hRot, float dx, float dz) {
+  void setMove(float hRot, float dx, float dy, float dz) {
     const float speed = 4.5;
     rot = hRot;
     float moveRot = rot;
     if (std::abs(dx) > 0.1f || std::abs(dz) > 0.1f) {
     //  moveRot += std::atan2(dz, dx) - PI / 2;
     }
-    vel.x = std::sin(moveRot) * dz * speed;
-    vel.x -= std::cos(moveRot) * dx * speed;
-    vel.z = std::cos(moveRot) * dz * speed;
-    vel.z += std::sin(moveRot) * dx * speed;
+
+    float runSpeedMod = 1;
+    if (!gravityAffected())
+      runSpeedMod = 0.5f;
+
+    vel.x = std::sin(moveRot) * dz * speed * runSpeedMod;
+    vel.x -= std::cos(moveRot) * dx * speed * runSpeedMod;
+    vel.z = std::cos(moveRot) * dz * speed * runSpeedMod;
+    vel.z += std::sin(moveRot) * dx * speed * runSpeedMod;
+    if (!gravityAffected())
+      vel.y = dy * speed * 0.5f;
   }
 
   void jump() {
-    vel.y = 7.0f;
+    if (gravityAffected())
+      vel.y = 7.0f;
   }
 
   void update(float dtime) {
     tryIncrease(pos.x, vel.x * dtime);
-    if (tryIncrease(pos.y, vel.y * dtime)) {
-      vel.y -= 20.0f * dtime;
+    if (gravityAffected()) {
+      if (tryIncrease(pos.y, vel.y * dtime)) {
+        vel.y -= 20.0f * dtime;
+      } else {
+        vel.y = -0.1f;
+      }
     } else {
-      vel.y = -0.1f;
+      tryIncrease(pos.y, vel.y * dtime);
     }
     tryIncrease(pos.z, vel.z * dtime);
   }

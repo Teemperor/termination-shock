@@ -7,12 +7,15 @@
 
 class Controls {
 
-  bool up = false;
-  bool down = false;
+  bool forward = false;
+  bool backwards = false;
   bool left = false;
   bool right = false;
+  bool up = false;
+  bool down = false;
 
   float x = 0;
+  float z = 0;
   float y = 0;
 
   bool leftMouse = false;
@@ -37,21 +40,25 @@ public:
     }
 
     if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
-      switch (event.key.keysym.sym) {
-        case SDLK_w:
-          up = event.type == SDL_KEYDOWN;
+      switch (event.key.keysym.scancode) {
+        case SDL_SCANCODE_W:
+          forward = event.type == SDL_KEYDOWN;
           break;
-        case SDLK_s:
-          down = event.type == SDL_KEYDOWN;
+        case SDL_SCANCODE_S:
+          backwards = event.type == SDL_KEYDOWN;
           break;
-        case SDLK_a:
+        case SDL_SCANCODE_A:
           left = event.type == SDL_KEYDOWN;
           break;
-        case SDLK_d:
+        case SDL_SCANCODE_D:
           right = event.type == SDL_KEYDOWN;
           break;
-        case SDLK_SPACE:
+        case SDL_SCANCODE_SPACE:
           jump = event.type == SDL_KEYDOWN;
+          up = event.type == SDL_KEYDOWN;
+          break;
+        case SDL_SCANCODE_LSHIFT:
+          down = event.type == SDL_KEYDOWN;
           break;
       }
     }
@@ -63,15 +70,19 @@ public:
   }
 
   void update() {
-    x = y = 0;
-    if (up)
-      y += 1;
-    if (down)
-      y -= 1;
+    x = z = y = 0;
+    if (forward)
+      z += 1;
+    if (backwards)
+      z -= 1;
     if (right)
       x += 1;
     if (left)
       x -= 1;
+    if (up)
+      y += 1;
+    if (down)
+      y -= 1;
   }
 
   int getBlockType() const {
@@ -104,6 +115,10 @@ public:
 
   float getX() const {
     return x;
+  }
+
+  float getZ() const {
+    return z;
   }
 
   float getY() const {

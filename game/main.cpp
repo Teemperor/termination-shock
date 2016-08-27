@@ -845,18 +845,18 @@ int main(int argc, char** argv) {
       camera.handleEvent(event);
     }
     controls.update();
-    //camera.updatePos(controls.getX(), controls.getY());
+    //camera.updatePos(controls.getX(), controls.getZ());
 
     if (controls.jumpPoll())
       if (Player.onGround())
         Player.jump();
-    Player.setMove(camera.getHorizAngle(), controls.getX(), controls.getY());
+    Player.setMove(camera.getHorizAngle(), controls.getX(), controls.getY(), controls.getZ());
     Player.update(deltaTime);
     camera.setPos(Player.position().x, Player.position().y, Player.position().z);
 
     Chunk.update(deltaTime);
 
-    std::cout << "Current V( " << Player.position().toVoxelPos() << "): " << Chunk.get(Player.position().toVoxelPos()).getName() << std::endl;
+    //std::cout << "Current V( " << Player.position().toVoxelPos() << "): " << Chunk.get(Player.position().toVoxelPos()).getName() << std::endl;
 
     if (controls.getBlockType() < BlockTypes.size())
       SelectedType = BlockTypes[controls.getBlockType()];
