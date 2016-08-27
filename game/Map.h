@@ -215,6 +215,10 @@ public:
     return Type == T;
   }
 
+  bool isBuildable() const {
+    return Type != AIR && Type != SPACE;
+  }
+
   bool isFree() const {
     return Type == AIR || Type == SPACE|| Type == AIRLOCK;
   }
@@ -693,7 +697,7 @@ public:
   }
 
   bool isGravityAffected(v3 pos) {
-    for (int i = 0; i < 7; ++i) {
+    for (int i = 0; i < 10; ++i) {
       if (get(pos).is(Voxel::STEEL_FLOOR))
         return true;
       pos.y--;
@@ -758,7 +762,7 @@ class MovingEntity : public Entity {
   }
 
   bool gravityAffected() const {
-    return Chunk->isGravityAffected(v3f(pos.x, pos.y, pos.z).toVoxelPos());
+    return Chunk->isGravityAffected(v3f(pos.x, pos.y - 2.0f, pos.z).toVoxelPos());
   }
 
   bool isPosGood() {

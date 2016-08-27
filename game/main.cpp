@@ -878,7 +878,7 @@ int main(int argc, char** argv) {
         v3 cameraVoxel((int64_t) cameraPos.x, (int64_t) cameraPos.y,
                        (int64_t) cameraPos.z);
 
-        if (Chunk.get(cameraVoxel).isFree())
+        if (!Chunk.get(cameraVoxel).isBuildable())
           continue;
 
         Chunk.setBlock(cameraVoxel, Voxel::AIR);
@@ -896,7 +896,7 @@ int main(int argc, char** argv) {
         v3 cameraVoxel((int64_t) testPos.x, (int64_t) testPos.y,
                        (int64_t) testPos.z);
 
-        if (Chunk.get(cameraVoxel).isFree()) {
+        if (!Chunk.get(cameraVoxel).isBuildable()) {
           lastFreePos = testPos;
           continue;
         }
