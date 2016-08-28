@@ -335,11 +335,6 @@ public:
     //uvs.insert(uvs.begin(), u.begin(), u.end());
   }
 
-  void add(const Rec &R) {
-    vertexes.insert(vertexes.begin(), R.vertexes.begin(), R.vertexes.end());
-    uvs.insert(uvs.begin(), R.uvs.begin(), R.uvs.end());
-  }
-
   void reset() {
     vertexes.clear();
     uvs.clear();
@@ -448,31 +443,166 @@ public:
   }
 };
 
+
+class StarArray {
+
+  GLuint vertexbuffer;
+  GLuint uvbuffer;
+  GLuint lightbuffer;
+
+  std::vector<GLfloat> vertexes;
+  std::vector<GLfloat> uvs;
+  std::vector<GLfloat> lights;
+
+  GLuint VertexArrayID;
+
+  TextureID Texture;
+
+  bool Finalized = false;
+
+public:
+  StarArray(const std::string &TexturePath) : Texture(
+    TextureManager.loadTexture(TexturePath)) {
+  }
+
+  ~StarArray() {
+    reset();
+  }
+
+  void add(const Rec &R, float light) {
+    vertexes.insert(vertexes.begin(), R.vertexes.begin(), R.vertexes.end());
+    uvs.insert(uvs.begin(), R.uvs.begin(), R.uvs.end());
+    lights.push_back(light);
+    lights.push_back(light);
+    lights.push_back(light);
+    lights.push_back(light);
+    lights.push_back(light);
+    lights.push_back(light);
+  }
+
+  void reset() {
+    vertexes.clear();
+    uvs.clear();
+    lights.clear();
+    if (!Finalized)
+      return;
+    Finalized = false;
+    glDeleteBuffers(1, &vertexbuffer);
+    glDeleteBuffers(1, &uvbuffer);
+    glDeleteBuffers(1, &lightbuffer);
+    glDeleteVertexArrays(1, &VertexArrayID);
+  }
+
+  void finalize() {
+    assert(!Finalized);
+    Finalized = true;
+
+    glGenVertexArrays(1, &VertexArrayID);
+    glBindVertexArray(VertexArrayID);
+
+    glGenBuffers(1, &vertexbuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+    glBufferData(GL_ARRAY_BUFFER, vertexes.size() * sizeof(GLfloat),
+                 vertexes.data(), GL_STATIC_DRAW);
+
+    glGenBuffers(1, &uvbuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
+    glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(GLfloat), uvs.data(),
+                 GL_STATIC_DRAW);
+
+    glGenBuffers(1, &lightbuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, lightbuffer);
+    glBufferData(GL_ARRAY_BUFFER, lights.size() * sizeof(GLfloat),
+                 lights.data(), GL_STATIC_DRAW);
+  }
+
+  void draw() {
+    if (vertexes.empty())
+      return;
+
+    Texture.activate();
+
+    // 1rst attribute buffer : vertices
+    glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+    glVertexAttribPointer(
+      0,                  // attribute. No particular reason for 0, but must match the layout in the shader.
+      3,                  // size
+      GL_FLOAT,           // type
+      GL_FALSE,           // normalized?
+      0,                  // stride
+      (void *) 0          // array buffer offset
+    );
+
+    // 2nd attribute buffer : UVs
+    glEnableVertexAttribArray(1);
+    glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
+    glVertexAttribPointer(
+      1,                                // attribute. No particular reason for 1, but must match the layout in the shader.
+      2,                                // size : U+V => 2
+      GL_FLOAT,                         // type
+      GL_FALSE,                         // normalized?
+      0,                                // stride
+      (void *) 0                        // array buffer offset
+    );
+
+    // 3nd attribute buffer : Lights
+    glEnableVertexAttribArray(2);
+    glBindBuffer(GL_ARRAY_BUFFER, lightbuffer);
+    glVertexAttribPointer(
+      2,                                // attribute. No particular reason for 1, but must match the layout in the shader.
+      1,                                // size : one float
+      GL_FLOAT,                         // type
+      GL_FALSE,                         // normalized?
+      0,                                // stride
+      (void *) 0                        // array buffer offset
+    );
+
+    // Draw the triangle !
+    glDrawArrays(GL_TRIANGLES, 0, vertexes.size() / 3);
+
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
+  }
+};
+
 class DeepSpaceRenderer {
-  BlockSideArray PlanetArray;
-  BlockSideArray StarArray;
+  StarArray PlanetArray;
+  StarArray StarArray;
 
 public:
   DeepSpaceRenderer() : PlanetArray("earth.bmp:linear"), StarArray("star.bmp:linear") {
     const float size = 9000;
     float distance = -13000;
-    PlanetArray.add(Rec(v3f(size, -size, distance), v3f(size, size, distance), v3f(-size, size, distance), v3f(-size, -size, distance)));
+    PlanetArray.add(Rec(v3f(size, -size, distance), v3f(size, size, distance), v3f(-size, size, distance), v3f(-size, -size, distance)), 1.0f);
     PlanetArray.finalize();
 
     std::default_random_engine generator;
     std::uniform_real_distribution<double> angleDistribution(-PI, PI);
-    std::uniform_real_distribution<double> sizeDistribution(0.7f, 1.3f);
-    std::uniform_real_distribution<double> distanceDistribution(0.95f, 1.05f);
+    std::uniform_real_distribution<double> sizeDistribution(0.1f, 1.4f);
+    std::uniform_real_distribution<double> distanceDistribution(0.90f, 1.1f);
+    std::uniform_real_distribution<double> lightDistribution(0, 1);
+    std::uniform_int_distribution<int> textureDistribution(0, 5);
 
     distance = 18000;
 
     const float starSize = 180;
-    int StarCount = 1700;
+    int StarCount = 2700;
     for (int i = 0; i < StarCount; ++i) {
       double horizontalAngle = angleDistribution(generator);
       double verticalAngle = angleDistribution(generator);
       double sizeFactor = sizeDistribution(generator);
       double distanceFactor = distanceDistribution(generator);
+      double lightFactor = lightDistribution(generator);
+
+      int u = textureDistribution(generator);
+      if (u > 1)
+        u = 0;
+      int v = textureDistribution(generator);
+      if (v > 1)
+        v = 0;
+
 
       v3f pos = v3f(
         (float) (cos(verticalAngle) * sin(horizontalAngle)),
@@ -497,8 +627,8 @@ public:
       StarArray.add(Rec(pos + right + up,
                         pos - right + up,
                         pos - right - up,
-                        pos + right - up
-      ));
+                        pos + right - up, std::make_pair(u * 0.5f, v * 0.5f), 0.5f, 0.5f
+      ), lightFactor);
     }
 
     StarArray.finalize();
