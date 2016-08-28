@@ -579,13 +579,9 @@ public:
     const float speed = 4.5;
     rot = hRot;
     float moveRot = rot;
-    if (std::abs(dx) > 0.1f || std::abs(dz) > 0.1f) {
-    //  moveRot += std::atan2(dz, dx) - PI / 2;
-    }
-
     float runSpeedMod = 1;
     if (!gravityAffected())
-      runSpeedMod = 2.5f;
+      runSpeedMod = 0.5f;
 
     vel.x = std::sin(moveRot) * dz * speed * runSpeedMod;
     vel.x -= std::cos(moveRot) * dx * speed * runSpeedMod;
