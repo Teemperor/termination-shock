@@ -17,6 +17,7 @@
 #include <unordered_set>
 #include <math.h>
 #include "Voxel.h"
+#include "stb_perlin.h"
 
 
 struct AnnotatedVoxel {
@@ -349,10 +350,13 @@ public:
   }
 
   void generateMeteor() {
+    static float factor = 0.01f;
     for (int64_t x = offset.x + 2; x <= offset.x + size.x - 2; ++x) {
       for (int64_t y = offset.y + 2; y <= offset.y + size.y - 2; ++y) {
         for (int64_t z = offset.z + 2; z <= offset.y + size.z - 2; ++z) {
-          get({x, y, z}) = Voxel::STONE;
+          float value = stb_perlin_noise3(x * factor, y * factor, z * factor);
+          if (value > 0.5f)
+            get({x, y, z}) = Voxel::STONE;
         }
       }
     }
@@ -553,11 +557,11 @@ class MovingEntity : public Entity {
   }
 
   bool gravityAffected() const {
-    return space->isGravityAffected(v3f(pos.x, pos.y - 2.0f, pos.z).toVoxelPos());
+    return space->isGravityAffected(v3f(pos.x, pos.y - 1.5f, pos.z).toVoxelPos());
   }
 
   bool isPosGood() {
-    return isHeightGood(-2.0f) &&isHeightGood(-1.5f) && isHeightGood(-0.7f) && isHeightGood(0) && isHeightGood(0.3f);
+    return isHeightGood(-1.5f) && isHeightGood(-0.8f) && isHeightGood(0) && isHeightGood(0.3f);
   }
 
   bool tryIncrease(float& target, float value) {

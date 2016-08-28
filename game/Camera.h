@@ -132,6 +132,8 @@ public:
 
       verticalAngle = std::max(-PI / 2, std::min(verticalAngle, PI / 2));
     }
+
+    //std::cout << "VANGLE: " << verticalAngle << std::endl;
   }
 
   glm::vec3 getDirection(float scale) const {

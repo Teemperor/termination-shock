@@ -449,18 +449,64 @@ public:
 };
 
 class DeepSpaceRenderer {
-  BlockSideArray Array;
+  BlockSideArray PlanetArray;
+  BlockSideArray StarArray;
 
 public:
-  DeepSpaceRenderer() : Array("earth.bmp:linear") {
-    const float size = 15000;
-    const float distance = -19000;
-    Array.add(Rec(v3f(size, -size, distance), v3f(size, size, distance), v3f(-size, size, distance), v3f(-size, -size, distance)));
-    Array.finalize();
+  DeepSpaceRenderer() : PlanetArray("earth.bmp:linear"), StarArray("star.bmp:linear") {
+    const float size = 9000;
+    float distance = -13000;
+    PlanetArray.add(Rec(v3f(size, -size, distance), v3f(size, size, distance), v3f(-size, size, distance), v3f(-size, -size, distance)));
+    PlanetArray.finalize();
+
+    std::default_random_engine generator;
+    std::uniform_real_distribution<double> angleDistribution(-PI, PI);
+    std::uniform_real_distribution<double> sizeDistribution(0.7f, 1.3f);
+    std::uniform_real_distribution<double> distanceDistribution(0.95f, 1.05f);
+
+    distance = 18000;
+
+    const float starSize = 180;
+    int StarCount = 1700;
+    for (int i = 0; i < StarCount; ++i) {
+      double horizontalAngle = angleDistribution(generator);
+      double verticalAngle = angleDistribution(generator);
+      double sizeFactor = sizeDistribution(generator);
+      double distanceFactor = distanceDistribution(generator);
+
+      v3f pos = v3f(
+        (float) (cos(verticalAngle) * sin(horizontalAngle)),
+        (float) sin(verticalAngle),
+        (float) (cos(verticalAngle) * cos(horizontalAngle)));
+
+      verticalAngle += PI / 2;
+
+      v3f helperUp = v3f(
+        (float) (cos(verticalAngle) * sin(horizontalAngle)),
+        (float) sin(verticalAngle),
+        (float) (cos(verticalAngle) * cos(horizontalAngle)));
+
+      v3f right = helperUp.cross(pos).normalize();
+
+      v3f up = right.cross(pos).normalize();
+
+      up *= starSize * sizeFactor;
+      right *= starSize * sizeFactor;
+      pos *= distance * distanceFactor;
+
+      StarArray.add(Rec(pos + right + up,
+                        pos - right + up,
+                        pos - right - up,
+                        pos + right - up
+      ));
+    }
+
+    StarArray.finalize();
   }
 
   void draw() {
-    Array.draw();
+    StarArray.draw();
+    PlanetArray.draw();
   }
 };
 
