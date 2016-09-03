@@ -579,6 +579,19 @@ public:
     vel.y = -0.4f;
   }
 
+  bool isCollidingWith(v3 p, float h) {
+    static const float r = 0.3f;
+    return
+      v3f(pos.x + r, pos.y + h, pos.z - r).toVoxelPos() == p ||
+      v3f(pos.x - r, pos.y + h, pos.z - r).toVoxelPos() == p ||
+      v3f(pos.x + r, pos.y + h, pos.z + r).toVoxelPos() == p ||
+      v3f(pos.x - r, pos.y + h, pos.z + r).toVoxelPos() == p;
+  }
+
+  bool isCollidingWith(v3 pos) {
+    return isCollidingWith(pos, -1.5f) || isCollidingWith(pos, -0.8f) || isCollidingWith(pos, 0) || isCollidingWith(pos, 0.3f);
+  }
+
   void setMove(float hRot, float dx, float dy, float dz) {
     const float speed = 4.5;
     rot = hRot;

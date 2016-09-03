@@ -1095,9 +1095,11 @@ int main(int argc, char** argv) {
           v3 lastFreeVoxel((int64_t) lastFreePos.x, (int64_t) lastFreePos.y,
                          (int64_t) lastFreePos.z);
           if (auto C = space.getChunk(lastFreeVoxel)) {
-            C->setBlock(lastFreeVoxel, SelectedType);
-            Renderer.recreateSurrounding(lastFreeVoxel);
-            Renderer2.recreateSurrounding(lastFreeVoxel);
+            if (!Player.isCollidingWith(lastFreeVoxel)) {
+              C->setBlock(lastFreeVoxel, SelectedType);
+              Renderer.recreateSurrounding(lastFreeVoxel);
+              Renderer2.recreateSurrounding(lastFreeVoxel);
+            }
           }
 
         }
