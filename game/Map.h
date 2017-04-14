@@ -368,7 +368,7 @@ public:
     timeSinceLastSpaceRecalc += deltaTime;
     if (timeSinceLastSpaceRecalc >= spaceRecalcTimer) {
       timeSinceLastSpaceRecalc -= spaceRecalcTimer;
-      recalcSpace();
+      // TODO readd this: recalcSpace();
     }
   }
 

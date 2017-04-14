@@ -69,7 +69,7 @@ public:
       //Create window
       Window = SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED,
                                 SDL_WINDOWPOS_UNDEFINED, Width, Height,
-                                SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+                                SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_FULLSCREEN_DESKTOP);
       if (Window == NULL) {
         printf("Window could not be created! SDL Error: %s\n", SDL_GetError());
         success = false;

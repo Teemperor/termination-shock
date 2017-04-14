@@ -6,7 +6,7 @@ option(USE_MINGW "Build with MinGW to windows" OFF)
 
 find_package(OpenGL REQUIRED)
 
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -flto ")
 
 # Compile external dependencies 
 add_subdirectory (external)
@@ -41,6 +41,24 @@ add_executable(termination_shock
 	common/texture.cpp
 	common/texture.hpp
 
+        game/VoxelMapRenderer.h
+        game/VoxelMapRenderer.cpp
+        game/VoxelRenderMap.h
+        game/VoxelRenderMap.cpp
+        game/StarArray.h
+        game/StarArray.cpp
+        game/DeepSpaceRenderer.cpp
+        game/DeepSpaceRenderer.h
+        game/Rec.h
+        game/Rec.cpp
+        game/TexRecArray.h
+        game/TexRecArray.cpp
+        game/Texture.h
+        game/Texture.cpp
+        game/FPSCounter.h
+        game/FPSCounter.cpp
+        game/IngameInterface.h
+        game/IngameInterface.cpp
 	game/Map.cpp
 	game/Map.h
 	game/RenderWindow.cpp
