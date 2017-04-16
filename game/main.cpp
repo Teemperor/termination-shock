@@ -28,6 +28,7 @@ using namespace glm;
 #include "Texture.h"
 #include "VoxelRenderMap.h"
 #include "DeepSpaceRenderer.h"
+#include "MovingEntity.h"
 
 # define M_PI           3.14159265358979323846  /* pi */
 
@@ -73,9 +74,7 @@ int main(int argc, char** argv) {
   // Get a handle for our "myTextureSampler" uniform
   GLuint SpaceTextureID = glGetUniformLocation(SpaceProgramID, "myTextureSampler");
 
-
   FPSCounter Counter;
-
 
   bool run = true;
 

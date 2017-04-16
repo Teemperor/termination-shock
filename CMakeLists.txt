@@ -47,6 +47,12 @@ add_executable(termination_shock
         game/VoxelRenderMap.cpp
         game/StarArray.h
         game/StarArray.cpp
+        game/Entity.h
+        game/Entity.cpp
+        game/MovingEntity.h
+        game/MovingEntity.cpp
+        game/VoxelChunk.h
+        game/VoxelChunk.cpp
         game/DeepSpaceRenderer.cpp
         game/DeepSpaceRenderer.h
         game/Rec.h

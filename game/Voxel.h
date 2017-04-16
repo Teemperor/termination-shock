@@ -20,7 +20,7 @@ public:
   static constexpr float TEX_SIZE = 1.0f / 16;
 
   enum Types {
-    SPACE,
+    SPACE = 0,
 
     AIR,
     GRASS,
@@ -192,5 +192,22 @@ public:
 
 };
 
+
+struct AnnotatedVoxel {
+  Voxel V;
+  // first top, second below
+  Voxel S[6];
+
+  std::pair<float, float> getUVOffset(unsigned side) const {
+    return V.getUVOffset(side, S[0].isFree());
+  };
+
+  uint8_t surroundLight() const {
+    uint8_t Result = 0;
+    for (int i = 0; i < 6; ++i)
+      Result = std::max(Result, S[i].light());
+    return Result;
+  }
+};
 
 #endif //TUTORIALS_VOXEL_H
