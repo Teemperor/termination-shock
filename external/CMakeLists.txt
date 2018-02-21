@@ -12,7 +12,7 @@ add_definitions(
 )
 
 ### GLFW ###
-
+set(GLFW_BUILD_DOCS NO)
 add_subdirectory (glfw-3.1.2)
 
 include_directories(

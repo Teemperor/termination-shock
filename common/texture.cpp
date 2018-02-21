@@ -19,7 +19,11 @@ GLuint loadBMP_custom(const char * imagepath, bool nearest){
 
 	// Open the file
 	FILE * file = fopen(imagepath,"rb");
-	if (!file)							    {printf("%s could not be opened. Are you in the right directory ? Don't forget to read the FAQ !\n", imagepath); getchar(); return 0;}
+  if (!file) {
+    printf("%s could not be opened (1). Are you in the right directory ? Don't forget to read the FAQ !\n", imagepath); getchar();
+    exit(1);
+    return 0;
+  }
 
 	// Read the header, i.e. the 54 first bytes
 
@@ -124,8 +128,9 @@ GLuint loadDDS(const char * imagepath){
 	/* try to open the file */ 
 	fp = fopen(imagepath, "rb"); 
 	if (fp == NULL){
-		printf("%s could not be opened. Are you in the right directory ? Don't forget to read the FAQ !\n", imagepath); getchar(); 
-		return 0;
+    printf("%s could not be opened (2). Are you in the right directory ? Don't forget to read the FAQ !\n", imagepath); getchar();
+    exit(1);
+    return 0;
 	}
    
 	/* verify the type of file */ 

@@ -1,3 +1,4 @@
+CMakeLists.txt.user*
 **/*.dll
 **/*.exe
 build/*
@@ -12,3 +13,4 @@ OpenGL-tutorial_v*
 **.mtl
 .DS_Store
 .idea
+*.autosave

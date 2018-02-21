@@ -38,7 +38,6 @@ int main(int argc, char** argv) {
   Controls controls;
   RenderWindow window(1920, 1080);
 
-
   // Dark blue background
   glClearColor(0.00f, 0.00f, 0.00f, 1.0f);
 
